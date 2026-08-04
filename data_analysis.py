@@ -13,8 +13,7 @@ def angle_between_vectors(v1, v2):
     norm_v2 = np.linalg.norm(v2)
     cos_theta = dot_product / (norm_v1 * norm_v2)
     angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
-    angle_deg = np.degrees(angle_rad)
-    return angle_deg
+    return angle_rad
 
 
 # Get the position vectors of Venus and Mars from JPL Horizons
