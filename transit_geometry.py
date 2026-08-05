@@ -4,11 +4,6 @@ from astroquery.jplhorizons import Horizons
 from astropy.time import Time
 from astropy import units as u
 from astropy.constants import R_sun
-import spiceypy as spice
-
-spice.furnsh("kernels/naif0012.tls")
-spice.furnsh("kernels/pck00011.tpc")
-spice.furnsh("kernels/de440s.bsp")
 
 
 def angle_between_vectors(v1, v2):
@@ -71,12 +66,3 @@ print(t.iso)
 transit_longitude = longitude[min_index]
 transit_latitude = latitude[min_index]
 print(transit_longitude, transit_latitude)
-
-def rotate_to_mars_frame(datetime_jd, r_eclip):
-    for i in datetime_jd:
-        t = Time(i, format='jd')
-        et = spice.str2et(t.iso)
-        R = spice.pxform("ECLIPJ2000", "IAU_MARS", et)
-        r_eclip = np.array([1, 2, 3])  # Replace with actual ecliptic coordinates of the point of interest
-        r_mars = R @ r_eclip
-        x_prime, y_prime, z_prime = r_mars
