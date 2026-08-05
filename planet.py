@@ -5,7 +5,6 @@ class Planet():
     '''
     
     '''
-
     def __init__(self, pos = [0,0,0], radius = 0, northPole = [0,0,1]):
         '''
         
@@ -43,7 +42,7 @@ class Planet():
         self.__pos = newPos
 
     # getting the longitude and latitude 
-    def longLat(self, rayVector):
+    def longLat(self, rayVector, datetime_jd):
         ''' 
         this returns the longitude and latitude centre of a transit from the blocked light by a given planet. 
         '''
