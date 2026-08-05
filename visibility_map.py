@@ -19,6 +19,5 @@ def rotate_to_mars_frame(datetime_jd, r_eclip):
         t = Time(i, format='jd')
         et = spice.str2et(t.iso)
         R = spice.pxform("ECLIPJ2000", "IAU_MARS", et)
-        r_eclip = np.array([1, 2, 3])  # Replace with actual ecliptic coordinates of the point of interest
         r_mars = R @ r_eclip
-        x_prime, y_prime, z_prime = r_mars
+        return r_mars
