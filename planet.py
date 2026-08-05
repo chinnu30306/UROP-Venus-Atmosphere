@@ -1,4 +1,5 @@
 import numpy as np
+from visibility_map import rotate_to_mars_frame
 
 
 class Planet():
@@ -57,10 +58,10 @@ class Planet():
         R = root * rayVector - self.__pos
 
         # rotating R vector    
-        newR = R # THIS NEEDS WORK 
+        rotate_to_mars_frame(R, datetime_jd)
 
         # converting the newR into latitude longitude 
-        lat = np.arctan(newR[2]/(newR[0] * newR[0] + newR[1] * newR[1])) * (180/np.pi)
-        Long = np.atan2(newR[1], newR[0]) * (180/np.pi)
+        lat = np.arctan(R[2]/(R[0] * R[0] + R[1] * R[1])) * (180/np.pi)
+        Long = np.atan2(R[1], R[0]) * (180/np.pi)
 
         return (lat, Long)
