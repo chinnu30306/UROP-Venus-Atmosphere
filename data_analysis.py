@@ -29,6 +29,7 @@ venus_position = list(zip(venus_x, venus_y, venus_z))
 
 mars = Horizons(id=499, location='500@10', epochs={'start':'2030-08-19', 'stop':'2030-08-21', 'step':'1min'})
 mars_vectors = mars.vectors()
+mars_eph = mars.ephemerides(extra_precision=True)
 
 mars_x = mars_vectors['x']
 mars_y = mars_vectors['y']
@@ -36,6 +37,8 @@ mars_z = mars_vectors['z']
 
 mars_position = list(zip(mars_x, mars_y, mars_z))
 
+longitude = mars_eph['PDSunLon']
+latitude = mars_eph['PDSunLat']
 
 # Use the cross product to find the angle between the two position vectors
 angle = []
@@ -58,3 +61,7 @@ plt.show()
 
 t = Time(venus_datetime_jd[min_index], format='jd')
 print(t.iso)
+
+transit_longitude = longitude[min_index]
+transit_latitude = latitude[min_index]
+print(transit_longitude, transit_latitude)
