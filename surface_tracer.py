@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib as plt
 from astroquery.jplhorizons import Horizons
 from astropy.constants import R_mars
 from planet import Planet
@@ -34,7 +35,13 @@ for i, time in enumerate(mars_datetime_jd):
     if latLong != None:
         latLongArray = np.append(latLongArray, latLong)
 
+longitude = np.array([])
+latitude = np.array([])
+for p in latLongArray:
+    longitude = np.append(longitude, [p[0]])
+    latitude = np.append(latitude, [p[1]])
+
 fig, ax = plt.subplots()
 ax.set_xlim(-180,180)
 ax.set_ylim(-90,90)
-ax.plot(latLongArray[1],latLongArray[0])
+ax.plot(longitude,latitude)
