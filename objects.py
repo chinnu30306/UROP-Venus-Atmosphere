@@ -129,12 +129,17 @@ class Planet():
         # coefficients of the quadratic
         rayVector = np.array(rayVector)
         R_m_sq = self.__r * self.__r
-        v_sq = np.dot(rayVector,rayVector)
-        r_sm_sq = np.dot(self.__pos,self.__pos)
-        r_smDotV = np.dot(rayVector, self.__pos)
+        v_sq = np.dot(rayVector,rayVector) * 1.496e+11 * 1.496e+11
+        r_sm_sq = np.dot(self.__pos,self.__pos) * 1.496e+11 * 1.496e+11
+        r_smDotV = np.dot(rayVector, self.__pos) * 1.496e+11 * 1.496e+11
+        a = v_sq
+        b = - 2 * r_smDotV
+        c = r_sm_sq - R_m_sq
 
         #  finding R vector
-        root = min(np.roots([v_sq, - 2 * r_smDotV, r_sm_sq - R_m_sq]))
+        if b * b < 4 * a *c:
+            return None
+        root = min(np.roots([a, b, c]))
         R_m = root * rayVector - self.__pos
 
         # rotating R vector    
