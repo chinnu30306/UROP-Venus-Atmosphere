@@ -54,10 +54,10 @@ R_mars = Mars.R.to("m").value
 Mars = Planet(pos = mars_position[0], radius = R_mars)
 
 latLongArray = []
-for i in range(len(time)):
+for i, t in enumerate(time):
     Mars.set_pos(mars_position[i])
-    latLong = Mars.longLat(venus_position[i], time[i])
-    print(f"Time: {time[i].iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
+    latLong = Mars.longLat(venus_position[i], t)
+    print(f"Time: {t.iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
     if latLong != None:
         latLongArray.append(latLong)
 
