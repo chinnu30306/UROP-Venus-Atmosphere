@@ -43,11 +43,17 @@ new1 = np.array(s_v_pos) - np.array(s_m_pos)
 
 
 # Use the cross product to find the angle between the two position vectors
-angle = []
+theta = []
+alpha_sun = []
+alpha_venus = []
 for i in range(len(new1)):
-    angle.append(angle_between_vectors(new1[i], -np.array(s_m_pos[i])))
+    theta.append(angle_between_vectors(new1[i], -np.array(s_m_pos[i])))
+    alpha_sun.append(np.arctan(R_sun / np.linalg.norm(s_m_pos[i])))
+    alpha_venus.append(np.arctan(R_sun / np.linalg.norm(s_v_pos[i])))
 
-min_index = np.argmin(angle)
+transit_threshold = alpha_sun + alpha_venus
+
+min_index = np.argmin(theta)
 sun_dist_au = np.linalg.norm(s_m_pos[min_index]) * u.au
 sun_dist_m = sun_dist_au.to(u.m)
 min_transit_angle_rad = 2 * np.arctan(R_sun / sun_dist_m)
@@ -55,7 +61,7 @@ print(R_sun)
 min_transit_angle_deg = np.degrees(min_transit_angle_rad.value)
 print(min_transit_angle_deg)
 
-plt.plot(datetime_jd, angle, label='Angle')
+plt.plot(datetime_jd, theta, label='Angle')
 plt.xlabel('Julian Date')
 plt.ylabel('Angle (rad)')
 plt.title('Angle between Venus and Sun over Time')

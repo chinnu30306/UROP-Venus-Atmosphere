@@ -35,8 +35,6 @@ min_index = np.argmin(angle)
 mars_dist_au = np.linalg.norm(mars_position[min_index]) * u.au
 mars_dist_m = mars_dist_au.to(u.m)
 min_transit_angle_rad = 2 * np.arcsin(R_sun / mars_dist_m)
-transit_time = datetime_jd[min_index]
-
 
 plt.plot(datetime_jd, angle, label='Angle')
 plt.xlabel('Julian Date')
@@ -46,6 +44,7 @@ plt.axhline(y=min_transit_angle_rad.value, color='r', linestyle='--', label=f'Mi
 plt.legend()
 plt.grid()
 plt.show()
+
 
 # Plotting the visibility map of Venus from Mars
 mars_pos = []
@@ -57,21 +56,15 @@ for i in range(len(angle)):
         mars_pos.append(mars_position[i])
         venus_pos.append(venus_position[i])
 
-R_mars = Mars.R.to("m").value
 R_mars_au = Mars.R.to("au").value
 Mars = Planet(pos = mars_position[0], radius = R_mars_au)
 
 latLongArray = []
-for i in range(len(time)):
+for i in range(len(datetime_jd)):
     Mars.set_pos(mars_position[i])
-    latLong = Mars.longLat(venus_position[i], time[i])
+    latLong = Mars.lat_long_new(venus_position[i], datetime_jd[i])
     if latLong != None:
         latLongArray.append(latLong)
-
-print("--------------------------------------------------")
-Mars.set_pos(mars_position[min_index])
-latLong1 = Mars.longLat(venus_position[min_index], transit_time)
-
 
 longitude = []
 latitude = []

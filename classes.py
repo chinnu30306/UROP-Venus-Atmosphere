@@ -1,88 +1,23 @@
 import numpy as np
-from functions import rotate_to_mars_frame
-
+from functions import angle_between_vectors, rotate_to_mars_frame
+from astropy.constants import R_sun
+from poliastro.bodies import Venus
 
 class Planet():
-    '''
-    A class representing a celestial body (planet) with position, radius, and orientation.
-    
-    This class provides functionality to calculate the apparent position of other
-    celestial objects as seen from the planet's surface, accounting for the planet's
-    rotation and surface geometry.
-    
-    Attributes
-    ----------
-    __pos : np.ndarray
-        3D position vector of the planet in the solar system barycenter frame [km]
-    __r : float
-        Radius of the planet [km]
-    __axes : np.ndarray
-        3D unit vector pointing to the planet's north pole
-        
-    Methods
-    -------
-    pos()
-        Returns the current position vector
-    rad()
-        Returns the planet's radius
-    pole()
-        Returns the north pole direction vector
-    set_pos(newPos)
-        Updates the planet's position
-    longLat(rayVector, datetime_jd)
-        Calculates the surface coordinates where a line-of-sight intersects the planet
-    '''
     def __init__(self, pos = [0,0,0], radius = 0):
-        '''
-        Initialize a Planet object with position, radius, and orientation.
-        
-        Parameters
-        ----------
-        pos : list or array-like, optional
-            Initial 3D position vector of the planet [km]. Default is [0,0,0].
-        radius : float, optional
-            Radius of the planet [km]. Default is 0.
-        northPole : list or array-like, optional
-            3D unit vector indicating the planet's north pole direction.
-            Default is [0,0,1] (Z-axis aligned).
-        '''
         self.__pos = np.array(pos)
         self.__r = radius
 
     #position getter   
     def pos(self):
-        '''
-        Get the planet's current position vector.
-        
-        Returns
-        -------
-        np.ndarray
-            3D position vector of the planet [km]
-        '''
         return self.__pos
 
     #radius getter
     def rad(self):
-        '''
-        Get the planet's radius.
-        
-        Returns
-        -------
-        float
-            Radius of the planet [m]
-        '''
         return self.__r
 
     #position setter
     def set_pos(self, newPos):
-        '''
-        Update the planet's position in space.
-        
-        Parameters
-        ----------
-        newPos : list or array-like
-            New 3D position vector for the planet [km]
-        '''
         self.__pos = newPos
 
     # getting the longitude and latitude 
@@ -139,3 +74,35 @@ class Planet():
         long = np.arctan2(R_prime[1], R_prime[0]) * (180 / np.pi)
 
         return (lat, long)
+
+    def lat_long_new(self, pos, time):
+        R_m_au = self.rad()
+        R_sun_au = R_sun.to("au").value
+        R_venus_au = Venus.R.to("au").value
+        r_sm = self.pos()
+        r_vm = - np.array(pos) + r_sm
+
+        theta = angle_between_vectors(-np.array(r_vm), -np.array(r_sm))
+        alpha_sun = np.arctan(R_sun_au / np.linalg.norm(r_sm))
+        alpha_venus = np.arctan(R_venus_au / np.linalg.norm(r_vm))
+        transit_threshold = alpha_sun + alpha_venus
+        if theta > transit_threshold:
+            return None
+
+        # (r_sm)^2*x^2 - 2*(r_sm . r_vm)*x + (r_vm)^2 - R_m^2 = 0
+        a = np.dot(r_sm, r_sm)
+        b = -2 * np.dot(r_sm, r_vm)
+        c = np.dot(r_vm, r_vm) - R_m_au * R_m_au
+
+        if b*b - 4*a*c < 0:
+            return None
+
+        root = min(np.roots([a, b, c]))
+        R_m_vec = root * r_vm + r_sm
+        R_prime = rotate_to_mars_frame(time, R_m_vec)
+
+        lat = np.arctan2(R_prime[2], np.sqrt(R_prime[0]**2 + R_prime[1]**2)) * (180 / np.pi)
+        long = np.arctan2(R_prime[1], R_prime[0]) * (180 / np.pi)
+
+        return (lat, long)
+
