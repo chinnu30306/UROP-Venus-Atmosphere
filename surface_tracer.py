@@ -65,7 +65,6 @@ latLongArray = []
 for i in range(len(time)):
     Mars.set_pos(mars_position[i])
     latLong = Mars.longLat(venus_position[i], time[i])
-    print(f"Time: {time[i].iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
     if latLong != None:
         latLongArray.append(latLong)
 
