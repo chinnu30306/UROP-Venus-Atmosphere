@@ -6,7 +6,6 @@ from astropy import units as u
 from astropy.constants import R_sun
 from functions import angle_between_vectors
 from objects import Planet
-from poliastro.bodies import Mars
 
 
 # Get the position vectors of Venus and Mars from JPL Horizons
@@ -50,14 +49,13 @@ for i in range(len(angle)):
     if angle[i] <= min_transit_angle_rad.value:
         time.append(Time(datetime_jd[i], format='jd'))
 
-R_mars = Mars.R.to("m").value
+R_mars = 3.3895e6
 Mars = Planet(pos = mars_position[0], radius = R_mars)
 
 latLongArray = []
 for i, t in enumerate(time):
     Mars.set_pos(mars_position[i])
     latLong = Mars.longLat(venus_position[i], t)
-    print(f"Time: {t.iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
     if latLong != None:
         latLongArray.append(latLong)
 
