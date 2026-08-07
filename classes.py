@@ -122,7 +122,7 @@ class Planet():
         a = v_sq
         b = - 2 * r_smDotV
         c = r_sm_sq - R_m_sq
-        print(f"Quadratic Coefficients: a={a}, b={b}, c={c}")
+        print("Quadratic Coefficients: a =", a, ", b =", b, ", c =", c)
 
         #  finding R vector
         if b * b < 4 * a *c:
