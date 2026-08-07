@@ -86,7 +86,7 @@ class Planet():
         self.__pos = newPos
 
     # getting the longitude and latitude 
-    def longLat(self, rayVector, datetime_jd):
+    def longLat(self, objectPos, datetime_jd):
         ''' 
         Calculate the longitude and latitude on the planet's surface where a
         line-of-sight vector from the planet intersects its surface.
@@ -98,9 +98,8 @@ class Planet():
         
         Parameters
         ----------
-        rayVector : array-like
-            3D vector pointing from the planet toward the target object 
-            (e.g., another planet or star) [km]
+        objectPos : array-like
+            3D position vector of the target object [km]
         datetime_jd : float
             Julian Date (JD) used to determine the planet's rotation angle for
             converting from inertial to body-fixed coordinates
@@ -114,14 +113,16 @@ class Planet():
         '''
 
         # coefficients of the quadratic
-        rayVector = np.array(rayVector)
+        venusPos = np.array(objectPos)
+        r_vm = self.__pos - venusPos
+        rayVector = np.array([venusPos[0], venusPos[1], 0])
         R_m_sq = self.__r * self.__r
         v_sq = np.dot(rayVector,rayVector) 
-        r_sm_sq = np.dot(self.__pos,self.__pos) 
-        r_smDotV = np.dot(rayVector, self.__pos)
+        r_vm_sq = np.dot(r_vm,r_vm) 
+        r_vmDotV = np.dot(rayVector, r_vm)
         a = v_sq
-        b = - 2 * r_smDotV
-        c = r_sm_sq - R_m_sq
+        b = - 2 * r_vmDotV
+        c = r_vm_sq - R_m_sq
         print("Quadratic Coefficients: a =", a, ", b =", b, ", c =", c)
 
         #  finding R vector
