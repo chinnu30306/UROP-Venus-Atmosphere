@@ -5,7 +5,7 @@ from astropy.time import Time
 from astropy import units as u
 from astropy.constants import R_sun
 from functions import angle_between_vectors
-from objects import Planet
+from classes import Planet
 from poliastro.bodies import Mars
 
 
@@ -25,6 +25,7 @@ mars_y = mars_vectors['y']
 mars_z = mars_vectors['z']
 mars_position = list(zip(mars_x, mars_y, mars_z))
 
+
 # Use the cross product to find the angle between the two position vectors
 angle = []
 for i in range(len(venus_position)):
@@ -35,30 +36,34 @@ mars_dist_au = np.linalg.norm(mars_position[min_index]) * u.au
 mars_dist_m = mars_dist_au.to(u.m)
 min_transit_angle_rad = 2 * np.arcsin(R_sun / mars_dist_m)
 
-plt.plot(datetime_jd, angle, label='Angle')
-plt.xlabel('Julian Date')
-plt.ylabel('Angle (rad)')
-plt.title('Angle between Venus and Mars over Time')
-plt.axhline(y=min_transit_angle_rad.value, color='r', linestyle='--', label=f'Minimum Transit Angle ({min_transit_angle_rad.value:.4f} rad)')
-plt.legend()
-plt.grid()
-plt.show()
+# plt.plot(datetime_jd, angle, label='Angle')
+# plt.xlabel('Julian Date')
+# plt.ylabel('Angle (rad)')
+# plt.title('Angle between Venus and Mars over Time')
+# plt.axhline(y=min_transit_angle_rad.value, color='r', linestyle='--', label=f'Minimum Transit Angle ({min_transit_angle_rad.value:.4f} rad)')
+# plt.legend()
+# plt.grid()
+# plt.show()
 
-
+# Plotting the visibility map of Venus from Mars
+mars_pos = []
+venus_pos = []
 time = []
 for i in range(len(angle)):
     if angle[i] <= min_transit_angle_rad.value:
         time.append(Time(datetime_jd[i], format='jd'))
+        mars_pos.append(mars_position[i])
+        venus_pos.append(venus_position[i])
 
 R_mars = Mars.R.to("m").value
-Mars = Planet(pos = mars_position[0], radius = R_mars)
+R_mars_au = Mars.R.to(u.au).value
+Mars = Planet(pos = mars_position[0], radius = R_mars_au)
 
 latLongArray = []
-for i in range(len(time)):
+for i in range(len(datetime_jd)):
     Mars.set_pos(mars_position[i])
-    latLong = Mars.longLat(venus_position[i], time[i])
-    print(f"Time: {time[i].iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
-    if latLong != None:
+    latLong = Mars.longLat(venus_position[i], datetime_jd[i])
+    if latLong is not None:
         latLongArray.append(latLong)
 
 longitude = []

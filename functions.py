@@ -19,6 +19,6 @@ spice.furnsh("kernels/de440s.bsp")
 def rotate_to_mars_frame(datetime_jd, r_eclip):
     t = Time(datetime_jd, format='jd')
     et = spice.str2et(t.iso)
-    R = spice.pxform("ECLIPJ2000", "IAU_MARS", et)
+    R = spice.pxform("ECLIPJ2000", "IAU_MARS", et)    
     r_mars = R @ r_eclip
     return r_mars
