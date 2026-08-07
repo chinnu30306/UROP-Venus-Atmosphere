@@ -58,7 +58,8 @@ for i in range(len(angle)):
         venus_pos.append(venus_position[i])
 
 R_mars = Mars.R.to("m").value
-Mars = Planet(pos = mars_position[0], radius = R_mars)
+R_mars_au = Mars.R.to("au").value
+Mars = Planet(pos = mars_position[0], radius = R_mars_au)
 
 latLongArray = []
 for i in range(len(time)):
