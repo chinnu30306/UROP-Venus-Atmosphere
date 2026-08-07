@@ -137,7 +137,7 @@ class Planet():
         c = r_sm_sq - R_m_sq
 
         #  finding R vector
-        if b * b < 4 * a *c:
+        if b * b < 4 * a * c:
             return None
         root = min(np.roots([a, b, c]))
         R_m = root * rayVector - self.__pos

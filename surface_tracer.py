@@ -5,7 +5,7 @@ from astropy.time import Time
 from astropy import units as u
 from astropy.constants import R_sun
 from functions import angle_between_vectors
-from classes import Planet
+from objects import Planet
 from poliastro.bodies import Mars
 
 
@@ -58,14 +58,14 @@ for i in range(len(angle)):
         venus_pos.append(venus_position[i])
 
 R_mars = Mars.R.to("m").value
-R_mars_au = Mars.R.to(u.au).value
-Mars = Planet(pos = mars_position[0], radius = R_mars_au)
+Mars = Planet(pos = mars_position[0], radius = R_mars)
 
 latLongArray = []
-for i in range(len(datetime_jd)):
+for i in range(len(time)):
     Mars.set_pos(mars_position[i])
-    latLong = Mars.longLat(venus_position[i], datetime_jd[i])
-    if latLong is not None:
+    latLong = Mars.longLat(venus_position[i], time[i])
+    print(f"Time: {time[i].iso}, Latitude: {latLong[0]:.4f}, Longitude: {latLong[1]:.4f}")
+    if latLong != None:
         latLongArray.append(latLong)
 
 print("--------------------------------------------------")
