@@ -5,12 +5,12 @@ from astropy.time import Time
 from astropy import units as u
 from astropy.constants import R_sun
 from functions import angle_between_vectors
-from objects import Planet
+from classes import Planet
 from poliastro.bodies import Mars
 
 
 # Get the position vectors of Venus and Mars from JPL Horizons
-venus = Horizons(id=299, location='500@10', epochs={'start':'2096-06-16', 'stop':'2096-06-17', 'step':'1min'})
+venus = Horizons(id=299, location='500@10', epochs={'start':'2030-08-19', 'stop':'2030-08-21', 'step':'1min'})
 venus_vectors = venus.vectors()
 venus_x = venus_vectors['x']
 venus_y = venus_vectors['y']
@@ -18,7 +18,7 @@ venus_z = venus_vectors['z']
 venus_position = list(zip(venus_x, venus_y, venus_z))
 datetime_jd = venus_vectors['datetime_jd']
 
-mars = Horizons(id=499, location='500@10', epochs={'start':'2096-06-16', 'stop':'2096-06-17', 'step':'1min'})
+mars = Horizons(id=499, location='500@10', epochs={'start':'2030-08-19', 'stop':'2030-08-21', 'step':'1min'})
 mars_vectors = mars.vectors()
 mars_x = mars_vectors['x']
 mars_y = mars_vectors['y']
