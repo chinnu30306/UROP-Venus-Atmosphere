@@ -32,3 +32,19 @@ def rtrings(rmax, nrings, multi):
         for j in range(npoints):
             theta = (2*np.pi / npoints)*j
             yield radius[i], theta
+
+def intercept(coeff, point):
+    return (
+        coeff[0] * point[0] * point[0] 
+        + coeff[1] * point[1] * point[1]
+        + coeff[2] * point[2] * point[2]
+        + 2 * (
+            coeff[3] * point[0] * point[1]
+            + coeff[4] * point[1] * point[2]
+            + coeff[5] * point[0] * point[2]
+            + coeff[6] * point[0]
+            + coeff[7] * point[1]
+            + coeff[8] * point[2]
+        )
+        + coeff[9]
+    )
