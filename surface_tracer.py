@@ -1,11 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from astropy.time import Time
-from astropy import units as u
-from astropy.constants import R_sun
-from functions import angle_between_vectors
-from classes import Planet
+from classes import Planet, Grid
 from poliastro.bodies import Mars
 
 
@@ -26,36 +22,7 @@ mars_z = mars_vectors['z']
 mars_position = list(zip(mars_x, mars_y, mars_z))
 
 
-# Use the cross product to find the angle between the two position vectors
-angle = []
-for i in range(len(venus_position)):
-    angle.append(angle_between_vectors(venus_position[i], mars_position[i]))
-
-min_index = np.argmin(angle)
-mars_dist_au = np.linalg.norm(mars_position[min_index]) * u.au
-mars_dist_m = mars_dist_au.to(u.m)
-min_transit_angle_rad = 2 * np.arcsin(R_sun / mars_dist_m)
-
-plt.plot(datetime_jd, angle, label='Angle')
-plt.xlabel('Julian Date')
-plt.ylabel('Angle (rad)')
-plt.title('Angle between Venus and Mars over Time')
-plt.axhline(y=min_transit_angle_rad.value, color='r', linestyle='--', label=f'Minimum Transit Angle ({min_transit_angle_rad.value:.4f} rad)')
-plt.legend()
-plt.grid()
-plt.show()
-
-
 # Plotting the visibility map of Venus from Mars
-mars_pos = []
-venus_pos = []
-time = []
-for i in range(len(angle)):
-    if angle[i] <= min_transit_angle_rad.value:
-        time.append(Time(datetime_jd[i], format='jd'))
-        mars_pos.append(mars_position[i])
-        venus_pos.append(venus_position[i])
-
 R_mars_au = Mars.R.to("au").value
 Mars = Planet(pos = mars_position[0], radius = R_mars_au)
 
@@ -81,3 +48,20 @@ ax.set_ylabel("Latitude (deg)")
 ax.set_title("Visibility Map of Venus from Mars")
 plt.grid()
 plt.show()
+
+
+mars_grid = Grid(180, 360)
+penumbra_cone = ...
+antumbra_cone = ...
+mars_grid.isInCone(penumbra_cone, 1)
+mars_grid.isInCone(antumbra_cone, 2)
+
+
+for i in range(mars_grid.get_rows()):
+    for j in range(mars_grid.get_cols()):
+        value = mars_grid.get_value(i, j)
+        if value == 1:
+            ax.plot(j-180, i-90, 'ro', markersize=1)  # Penumbra
+        elif value == 2:
+            ax.plot(j-180, i-90, 'bo', markersize=1)  # Antumbra
+        

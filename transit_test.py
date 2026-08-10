@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from astropy.time import Time
-from astropy import units as u
 from functions import angle_between_vectors
 from astropy.constants import R_sun
 from poliastro.bodies import Venus

@@ -98,7 +98,7 @@ class Planet():
             return None
 
         root = min(np.roots([a, b, c]))
-        R_m_vec = root * r_vm + r_sm
+        R_m_vec = -r_vm + root * r_sm
         R_prime = rotate_to_mars_frame(time, R_m_vec)
 
         lat = np.arctan2(R_prime[2], np.sqrt(R_prime[0]**2 + R_prime[1]**2)) * (180 / np.pi)
@@ -106,3 +106,50 @@ class Planet():
 
         return (lat, long)
 
+
+class Grid():
+    def __init__(self, rows, cols):
+        self.rows = rows
+        self.cols = cols
+        self.value = np.zeros((rows, cols))
+
+    def get_rows(self):
+        return self.rows
+
+    def get_cols(self):
+        return self.cols
+
+    def set_value(self, row, col, value):
+        self.value[row, col] = value
+
+    def get_value(self, row, col):
+        return self.value[row, col]
+
+    def isInCone(self, cone, value):
+        for i in range(self.rows()):
+            for j in range(self.cols()):
+                if cone:
+                    self.set_value(i, j, value)
+        
+# class Sphere():
+#     def __init__(self, R3, r_13):
+#         self.R3 = R3
+#         self.r_13 = np.array(r_13)
+
+class Cone():
+    def __init__(self, R1, R2, r_12):
+        self.R1 = R1
+        self.R2 = R2
+        self.r_12 = np.array(r_12)
+        self.r_12_mag = np.linalg.norm(r_12)
+        self.h = self.R1 * (self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2)) / (self.r_12_mag * (self.R1 - self.R2))
+        self.R_c = self.R1 / self.r_12_mag * np.sqrt(self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2))
+        self.delta = (self.R1 - self.R2) / self.r_12_mag
+        self.n = self.R1 / self.delta - self.h
+
+    def cone_sphere_intersect(self, other):
+        A = self.r_12[0]*self.r_12[0] / self.r_12_mag*self.r_12_mag
+        B = self.r_12[1]*self.r_12[1] / self.r_12_mag*self.r_12_mag
+        C = 
+        K = self.R1*self.R1 + (1 - self.delta*self.delta) * (other.pos()*other.pos() - other.rad()*other.rad())
+    
