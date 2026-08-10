@@ -4,9 +4,10 @@ from astropy.constants import R_sun
 from poliastro.bodies import Venus
 
 class Planet():
-    def __init__(self, pos = [0,0,0], radius = 0):
+    def __init__(self, pos = [0,0,0], radius = 0, rows, cols):
         self.__pos = np.array(pos)
         self.__r = radius
+        self.grid = Grid(rows, cols)
 
     #position getter   
     def pos(self):
@@ -150,6 +151,14 @@ class Cone():
     def cone_sphere_intersect(self, other):
         A = self.r_12[0]*self.r_12[0] / self.r_12_mag*self.r_12_mag
         B = self.r_12[1]*self.r_12[1] / self.r_12_mag*self.r_12_mag
-        C = 
+        C = (self.z_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
+        D = (self.x_12 * self.y_12) / (self.r_12_mag * self.r_12_mag)
+        E = (self.y_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
+        F = (self.x_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
+        G = -self.x_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.x_12) / self.r_12_mag
+        H = -self.y_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.y_12) / self.r_12_mag
+        J = -self.z_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.z_12) / self.r_12_mag
         K = self.R1*self.R1 + (1 - self.delta*self.delta) * (other.pos()*other.pos() - other.rad()*other.rad())
+
+
     
