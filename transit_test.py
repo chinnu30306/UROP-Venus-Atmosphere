@@ -53,6 +53,11 @@ for i in range(len(v_m_pos)):
     alpha_venus = np.arctan(R_venus_au / np.linalg.norm(v_m_pos[i]))
     transit_threshold.append(alpha_sun + alpha_venus)
 
+min_theta = min(theta)
+min_index = theta.index(min_theta)
+min_jd = datetime_jd[min_index]
+print(min_index)
+print(min_jd)
 
 plt.plot(datetime_jd, theta, label='Angle')
 plt.plot(datetime_jd, transit_threshold, label='Transit Threshold')
