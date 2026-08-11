@@ -4,7 +4,7 @@ from astropy.constants import R_sun
 from poliastro.bodies import Venus
 
 class Planet():
-    def __init__(self, pos = [0,0,0], radius = 0, rows, cols):
+    def __init__(self, pos = [0,0,0], radius = 0, rows=180, cols=360):
         self.__pos = np.array(pos)
         self.__r = radius
         self.grid = Grid(rows, cols, self.__r)
@@ -80,13 +80,17 @@ class Planet():
         return (lat, long)
 
     def isInCone(self, other, value, time):
+        coeffs = other.cone_sphere_intersect(self)
         for i in range(self.grid.get_rows()):
             for j in range(self.grid.get_cols()):
-                R_vec = rotate_to_sun_frame(time, self.R_prime[i, j])
-                coeffs = other.cone_sphere_intersect(self)
-                eqn = intercept(coeffs, R_vec)
-                if eqn >= 0:
-                    self.set_value(i, j, value)
+                R_vec = rotate_to_sun_frame(time, self.grid.R_prime[i, j])
+
+                if angle_between_vectors(R_vec, - np.array(self.pos())) > np.pi/2:
+                    pass
+                else:
+                    eqn = intercept(coeffs, R_vec + self.pos())
+                    if eqn >= 0:
+                        self.grid.set_value(i, j, value)
 
 
 class Grid():
@@ -135,22 +139,24 @@ class Cone():
         self.R2 = R2
         self.r_12 = np.array(r_12)
         self.r_12_mag = np.linalg.norm(r_12)
-        self.h = self.R1 * (self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2)) / (self.r_12_mag * (self.R1 - self.R2))
-        self.R_c = self.R1 / self.r_12_mag * np.sqrt(self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2))
         self.delta = (self.R1 - self.R2) / self.r_12_mag
-        self.n = self.R1 / self.delta - self.h
+
+    def set_r12(self, r_12):
+        self.r_12 = np.array(r_12)
+        self.r_12_mag = np.linalg.norm(r_12)
+        self.delta = (self.R1 - self.R2) / self.r_12_mag
 
     def cone_sphere_intersect(self, other): # defines coefficients for quadric that needs to be solved to find the intersect between 
-        A = self.r_12[0] * self.r_12[0] / (self.r_12_mag * self.r_12_mag)
-        B = self.r_12[1] * self.r_12[1] / (self.r_12_mag * self.r_12_mag)
-        C = (self.z_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
-        D = (self.x_12 * self.y_12) / (self.r_12_mag * self.r_12_mag)
-        E = (self.y_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
-        F = (self.x_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
-        G = -self.x_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.x_12) / self.r_12_mag
-        H = -self.y_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.y_12) / self.r_12_mag
-        J = -self.z_13 * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.z_12) / self.r_12_mag
-        K = self.R1 * self.R1 + (1 - self.delta * self.delta) * (np.dot(other.pos(),other.pos()) - other.rad() * other.rad())
+        A = (self.r_12[0] * self.r_12[0]) / (self.r_12_mag * self.r_12_mag)
+        B = (self.r_12[1] * self.r_12[1]) / (self.r_12_mag * self.r_12_mag)
+        C = (self.r_12[2] * self.r_12[2]) / (self.r_12_mag * self.r_12_mag)
+        D = (self.r_12[0] * self.r_12[1]) / (self.r_12_mag * self.r_12_mag)
+        E = (self.r_12[1] * self.r_12[2]) / (self.r_12_mag * self.r_12_mag)
+        F = (self.r_12[0] * self.r_12[2]) / (self.r_12_mag * self.r_12_mag)
+        G = -other.pos()[0] * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.r_12[0]) / self.r_12_mag
+        H = -other.pos()[1] * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.r_12[1]) / self.r_12_mag
+        J = -other.pos()[2] * (1 - self.delta * self.delta) - (self.delta * self.R1 * self.r_12[2]) / self.r_12_mag
+        K = self.R1 * self.R1 + (1 - self.delta * self.delta) * (np.dot(other.pos(), other.pos()) - other.rad() * other.rad())
 
         return [A, B, C, D, E, F, G, H, J, K]
 
