@@ -140,6 +140,15 @@ class Cone():
         self.delta = (self.R1 - self.R2) / self.r_12_mag
         self.n = self.R1 / self.delta - self.h
 
+    def set_r12(self, r_12):
+        self.r_12 = np.array(r_12)
+        self.r_12_mag = np.linalg.norm(r_12)
+        self.h = self.R1 * (self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2)) / (self.r_12_mag * (self.R1 - self.R2))
+        self.R_c = self.R1 / self.r_12_mag * np.sqrt(self.r_12_mag*self.r_12_mag - (self.R1 - self.R2)*(self.R1 - self.R2))
+        self.delta = (self.R1 - self.R2) / self.r_12_mag
+        self.n = self.R1 / self.delta - self.h
+
+
     def cone_sphere_intersect(self, other): # defines coefficients for quadric that needs to be solved to find the intersect between 
         A = self.r_12[0] * self.r_12[0] / (self.r_12_mag * self.r_12_mag)
         B = self.r_12[1] * self.r_12[1] / (self.r_12_mag * self.r_12_mag)
