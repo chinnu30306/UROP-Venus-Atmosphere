@@ -12,6 +12,7 @@ def angle_between_vectors(v1, v2):
     angle_rad = np.arccos(np.clip(cos_theta, -1.0, 1.0))
     return angle_rad
 
+
 spice.furnsh("kernels/naif0012.tls")
 spice.furnsh("kernels/pck00011.tpc")
 spice.furnsh("kernels/de440s.bsp")
@@ -23,15 +24,6 @@ def rotate_to_mars_frame(datetime_jd, r_eclip):
     r_mars = R @ r_eclip
     return r_mars
 
-
-def rtrings(rmax, nrings, multi):
-    yield 0.0, 0.0
-    radius = np.linspace(0, rmax, nrings+1)
-    for i in range(1, len(radius)):
-        npoints = i * multi
-        for j in range(npoints):
-            theta = (2*np.pi / npoints)*j
-            yield radius[i], theta
 
 def intercept(coeff, point):
     return (

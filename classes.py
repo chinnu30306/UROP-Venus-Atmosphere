@@ -8,46 +8,18 @@ class Planet():
         self.__pos = np.array(pos)
         self.__r = radius
         self.grid = Grid(rows, cols, self.__r)
-
-    #position getter  
+  
     def pos(self):
         return self.__pos
 
-    #radius getter
     def rad(self):
         return self.__r
 
-    #position setter
     def set_pos(self, newPos):
         self.__pos = newPos
 
     # getting the longitude and latitude 
     def longLat(self, objectPos, datetime_jd):
-        ''' 
-        Calculate the longitude and latitude on the planet's surface where a
-        line-of-sight vector from the planet intersects its surface.
-        
-        This method solves for the intersection of a ray (from the planet center
-        through the given direction) with the planet's spherical surface. It then
-        rotates the intersection point into the planet's body-fixed reference
-        frame (accounting for planetary rotation) and converts to longitude/latitude.
-        
-        Parameters
-        ----------
-        objectPos : array-like
-            3D position vector of the target object [km]
-        datetime_jd : float
-            Julian Date (JD) used to determine the planet's rotation angle for
-            converting from inertial to body-fixed coordinates
-            
-        Returns
-        -------
-        tuple
-            (latitude, longitude) in degrees, where:
-            - latitude is in range [-90°, +90°]
-            - longitude is in range [-180°, +180°]
-        '''
-
         # coefficients of the quadratic
         venusPos = np.array(objectPos)
         r_vm = self.__pos - venusPos
@@ -121,17 +93,20 @@ class Grid():
         self.cols = cols
         self.value = np.zeros((rows, cols))
         self.R_vec = np.zeros((rows, cols, 3))
-        # ------------------- ERROR ---------------------
-        for i, lat in range(self.rows):
-            for j, long in range(self.cols):
 
-                lat_rad = np.radians(i*lat)
-                long_rad = np.radians(long)
-
-                x = R * np.cos(lat_rad) * np.cos(long_rad)
-                y = R * np.cos(lat_rad) * np.sin(long_rad)
+        # Create arrays of latitudes and longitudes
+        lats = np.linspace(-90, 90, rows)    # rows points from -90° to +90°
+        lons = np.linspace(-180, 180, cols)  # cols points from -180° to +180°
+        
+        for i, lat in enumerate(lats):
+            for j, lon in enumerate(lons):
+                lat_rad = np.radians(lat)
+                lon_rad = np.radians(lon)
+                
+                x = R * np.cos(lat_rad) * np.cos(lon_rad)
+                y = R * np.cos(lat_rad) * np.sin(lon_rad)
                 z = R * np.sin(lat_rad)
-
+                
                 self.R_vec[i, j] = [x, y, z]
 
     def get_rows(self):
@@ -163,7 +138,7 @@ class Cone():
         self.delta = (self.R1 - self.R2) / self.r_12_mag
         self.n = self.R1 / self.delta - self.h
 
-    def cone_sphere_intersect(self, other):
+    def cone_sphere_intersect(self, other): # defines coefficients for quadric that needs to be solved to find the intersect between 
         A = self.r_12[0] * self.r_12[0] / (self.r_12_mag * self.r_12_mag)
         B = self.r_12[1] * self.r_12[1] / (self.r_12_mag * self.r_12_mag)
         C = (self.z_12 * self.z_12) / (self.r_12_mag * self.r_12_mag)
