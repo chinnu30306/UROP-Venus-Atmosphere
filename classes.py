@@ -1,5 +1,5 @@
 import numpy as np
-from functions import angle_between_vectors, rotate_to_mars_frame, intercept
+from functions import angle_between_vectors, rotate_to_mars_frame, intercept, rotate_to_sun_frame
 from astropy.constants import R_sun
 from poliastro.bodies import Venus
 
@@ -79,20 +79,22 @@ class Planet():
 
         return (lat, long)
 
-    def isInCone(self, other, value):
+    def isInCone(self, other, value, time):
         for i in range(self.grid.get_rows()):
             for j in range(self.grid.get_cols()):
+                R_vec = rotate_to_sun_frame(time, self.R_prime[i, j])
                 coeffs = other.cone_sphere_intersect(self)
-                eqn = intercept(coeffs, self.R_vec[i, j])
+                eqn = intercept(coeffs, R_vec)
                 if eqn >= 0:
                     self.set_value(i, j, value)
+
 
 class Grid():
     def __init__(self, rows, cols, R):
         self.rows = rows
         self.cols = cols
         self.value = np.zeros((rows, cols))
-        self.R_vec = np.zeros((rows, cols, 3))
+        self.R_prime = np.zeros((rows, cols, 3))
 
         # Create arrays of latitudes and longitudes
         lats = np.linspace(-90, 90, rows)    # rows points from -90° to +90°
@@ -107,7 +109,7 @@ class Grid():
                 y = R * np.cos(lat_rad) * np.sin(lon_rad)
                 z = R * np.sin(lat_rad)
                 
-                self.R_vec[i, j] = [x, y, z]
+                self.R_prime[i, j] = [x, y, z]
 
     def get_rows(self):
         return self.rows

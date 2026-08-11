@@ -24,6 +24,13 @@ def rotate_to_mars_frame(datetime_jd, r_eclip):
     r_mars = R @ r_eclip
     return r_mars
 
+def rotate_to_sun_frame(datetime_jd, r):
+    t = Time(datetime_jd, format='jd')
+    et = spice.str2et(t.iso)
+    R = spice.pxform("IAU_MARS", "ECLIPJ2000", et)    
+    r_sun = R @ r
+    return r
+
 
 def intercept(coeff, point):
     return (
