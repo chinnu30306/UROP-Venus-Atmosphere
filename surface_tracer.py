@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
 from classes import Planet, Grid
 from poliastro.bodies import Mars
+from matplotlib.patches import Rectangle
 
 
 # Get the position vectors of Venus and Mars from JPL Horizons
@@ -56,12 +57,12 @@ antumbra_cone = ...
 mars_grid.isInCone(penumbra_cone, 1)
 mars_grid.isInCone(antumbra_cone, 2)
 
-
 for i in range(mars_grid.get_rows()):
     for j in range(mars_grid.get_cols()):
         value = mars_grid.get_value(i, j)
+        xy = (j-180, i-90)
         if value == 1:
-            ax.plot(j-180, i-90, 'ro', markersize=1)  # Penumbra
+            ax.add_patch(Rectangle(xy,1,1, fc = 'r'))  # Penumbra
         elif value == 2:
-            ax.plot(j-180, i-90, 'bo', markersize=1)  # Antumbra
+            ax.add_patch(Rectangle(xy,1,1, fc = 'b'))  # Antumbra
         
