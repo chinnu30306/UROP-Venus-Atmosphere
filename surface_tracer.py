@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from classes import Planet, Grid
-from poliastro.bodies import Mars
+from classes import Planet, Grid, Cone
+from astropy.constants import R_sun
+from poliastro.bodies import Mars, Venus
 from matplotlib.patches import Rectangle
 
 
@@ -25,7 +26,7 @@ mars_position = list(zip(mars_x, mars_y, mars_z))
 
 # Plotting the visibility map of Venus from Mars
 R_mars_au = Mars.R.to("au").value
-Mars = Planet(pos = mars_position[0], radius = R_mars_au)
+Mars = Planet(pos = mars_position[0], radius = R_mars_au, rows=180, cols=360)
 
 latLongArray = []
 for i in range(len(datetime_jd)):
@@ -50,19 +51,33 @@ ax.set_title("Visibility Map of Venus from Mars")
 plt.grid()
 plt.show()
 
+time = []
+venus_pos = []
+mars_pos = []
+for i, time in enumerate(datetime_jd):
+    if time > 2462733.3:
+        if time < 2462733.6:
+            time.append[time]
+            venus_pos.append[venus_position[i]]
+            mars_pos.append[mars_position[i]]
 
-mars_grid = Grid(180, 360)
-penumbra_cone = ...
-antumbra_cone = ...
-mars_grid.isInCone(penumbra_cone, 1)
-mars_grid.isInCone(antumbra_cone, 2)
+R_sun_au = R_sun.to("au").value
+R_venus_au = Venus.R.to("au").value
+R_mars_au = Mars.R.to("au").value
 
-for i in range(mars_grid.get_rows()):
-    for j in range(mars_grid.get_cols()):
-        value = mars_grid.get_value(i, j)
+Mars = Planet(pos = mars_position[0], radius = R_mars_au, rows=180, cols=360)
+antumbra_cone = Cone(R_sun_au, R_venus_au, venus_pos[0])
+
+for i, time in enumerate(time):
+    Mars.set_pos(mars_pos[i])
+    antumbra_cone.set_r12(venus_pos[i])
+    Mars.isInCone(antumbra_cone, 1, time)
+
+for i in range(Mars.grid.get_rows()):
+    for j in range(Mars.grid.get_cols()):
+        value = Mars.grid.get_value(i, j)
         xy = (j-180, i-90)
         if value == 1:
             ax.add_patch(Rectangle(xy,1,1, fc = 'r'))  # Penumbra
         elif value == 2:
             ax.add_patch(Rectangle(xy,1,1, fc = 'b'))  # Antumbra
-        
