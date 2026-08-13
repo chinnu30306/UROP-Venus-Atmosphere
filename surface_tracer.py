@@ -55,11 +55,10 @@ time = []
 venus_pos = []
 mars_pos = []
 for i, t in enumerate(datetime_jd):
-    if t > 2462733.3:
-        if t < 2462733.6:
-            time.append(t)
-            venus_pos.append(venus_position[i])
-            mars_pos.append(mars_position[i])
+    if 2462733.3 < t < 2462733.6:
+        time.append(t)
+        venus_pos.append(venus_position[i])
+        mars_pos.append(mars_position[i])
 
 R_sun_au = R_sun.to("au").value
 R_venus_au = Venus.R.to("au").value
@@ -84,9 +83,9 @@ antumbra_cone = Cone(R_sun_au, R_venus_au, venus_pos[0])
 
 # plt.show()
 
-mars.set_pos(mars_position[1424])
-antumbra_cone.set_r12(venus_position[1424])
-mars.isInCone(antumbra_cone, 1, datetime_jd[1424])
+mars.set_pos(mars_pos[30])
+antumbra_cone.set_r12(venus_pos[30])
+mars.isInCone(antumbra_cone, 1, time[30])
 
 for i in range(mars.grid.get_rows()):
     for j in range(mars.grid.get_cols()):

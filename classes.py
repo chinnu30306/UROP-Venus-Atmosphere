@@ -79,6 +79,40 @@ class Planet():
 
         return (lat, long)
 
+    def lat_long_newer(self, pos, time):
+        R_m_au = self.rad()
+        R_sun_au = R_sun.to("au").value
+        R_venus_au = Venus.R.to("au").value
+
+        r_sm = np.array(self.pos())           # Sun -> Mars (heliocentric)
+        venus_pos = np.array(pos)   # Sun -> Venus (heliocentric)
+        r_vm = r_sm - venus_pos     # Venus -> Mars
+
+        # angular separation of Venus from the Sun, seen from Mars's centre
+        theta = angle_between_vectors(-r_vm, -r_sm)
+        alpha_sun = np.arctan(R_sun_au / np.linalg.norm(r_sm))
+        alpha_venus = np.arctan(R_venus_au / np.linalg.norm(r_vm))
+        if theta > alpha_sun + alpha_venus:
+            return None   # no transit visible from Mars's centre at this time
+
+        # intersect the Sun-Venus line  Q(t) = t * venus_pos  with the Mars sphere
+        # |t*venus_pos - r_sm|^2 = R_m_au^2
+        a = np.dot(venus_pos, venus_pos)
+        b = -2 * np.dot(venus_pos, r_sm)
+        c = np.dot(r_sm, r_sm) - R_m_au * R_m_au
+        disc = b * b - 4 * a * c
+        if disc < 0:
+            return None
+
+        t = min(np.roots([a, b, c]))     # near-side (sun-facing) intersection
+        Q = t * venus_pos                # heliocentric point on Mars's surface
+        R_m_vec = Q - r_sm               # relative to Mars's centre
+        R_prime = rotate_to_mars_frame(time, R_m_vec)
+
+        lat = np.arctan2(R_prime[2], np.hypot(R_prime[0], R_prime[1])) * 180/np.pi
+        long = np.arctan2(R_prime[1], R_prime[0]) * 180/np.pi
+        return (lat, long)
+
     def isInCone(self, other, value, time):
         coeffs = other.cone_sphere_intersect(self)
         for i in range(self.grid.get_rows()):
