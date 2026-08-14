@@ -1,0 +1,89 @@
+import numpy as np
+from astropy.time import Time
+import spiceypy as spice
+
+def angle_between_vectors(v1, v2):
+    v1 = np.array(v1)
+    v2 = np.array(v2)
+    cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    return np.arccos(np.clip(cos_theta, -1.0, 1.0))
+
+spice.furnsh("kernels/naif0012.tls")
+spice.furnsh("kernels/pck00011.tpc")
+spice.furnsh("kernels/de440s.bsp")
+
+def rotate_to_mars_frame(datetime_jd, r_eclip):
+    """Rotate a Mars-centred offset vector from ECLIPJ2000 into IAU_MARS."""
+    t = Time(datetime_jd, format='jd')
+    et = spice.str2et(t.iso)
+    R = spice.pxform("ECLIPJ2000", "IAU_MARS", et)
+    return R @ r_eclip
+
+def rotate_to_sun_frame(datetime_jd, r_mars_body):
+    """Rotate a Mars-centred offset vector from IAU_MARS into ECLIPJ2000."""
+    t = Time(datetime_jd, format='jd')
+    et = spice.str2et(t.iso)
+    R = spice.pxform("IAU_MARS", "ECLIPJ2000", et)
+    return R @ r_mars_body
+
+def quadric(coeff, point):
+    """
+    Evaluate the general quadric (Veras 2019, eq. 7):
+        A x^2 + B y^2 + C z^2 + 2D xy + 2E yz + 2F xz + 2G x + 2H y + 2J z + K
+    `point` must be expressed in the SAME frame the coefficients were
+    derived in (heliocentric / ECLIPJ2000-oriented, origin at the Sun).
+    """
+    x, y, z = point
+    A, B, C, D, E, F, G, H, J, K = coeff
+    return (A*x*x + B*y*y + C*z*z
+            + 2*(D*x*y + E*y*z + F*x*z + G*x + H*y + J*z)
+            + K)
+
+import numpy as np
+
+def transit_visible_from_mars(R1, R2, R3, r12, r13):
+    """
+    Veras (2019) eqs. (37), (53)-(58): is any part of the target
+    (Mars, radius R3) inside the primary-occulter shadow cone?
+
+    R1, R2, R3 : radii of Sun, Venus, Mars (consistent units, e.g. AU)
+    r12        : Sun -> Venus vector (heliocentric)
+    r13        : Sun -> Mars vector (heliocentric)
+    """
+    r12 = np.array(r12, dtype=float)
+    r13 = np.array(r13, dtype=float)
+    r12_mag = np.linalg.norm(r12)
+    r13_mag = np.linalg.norm(r13)
+
+    delta = (R1 - R2) / r12_mag                      # eq. (14)
+
+    # eq. (37): depends only on R1, delta, r13, R3 -- not on Venus's
+    # exact direction, only its distance (via delta)
+    Kint = R1**2 + (1 - delta**2) * (r13_mag**2 - R3**2)
+    if Kint < 0:
+        # Mars is closer to the Sun than the cone's own radius allows
+        # for a tangent solution to exist -- treat as "not in transit"
+        return False
+
+    sqrtK = np.sqrt(Kint)
+
+    # eq. (53): tangent-point distance from the Sun
+    r_tan = (Kint + R1**2 - 2*delta*R1*sqrtK) / (1 - delta**2)
+
+    # eq. (54)
+    cos_xi_tan = sqrtK / r_tan
+
+    # eq. (55)
+    numerator = Kint**1.5 - delta * R1 * Kint
+    denom = r13_mag * np.sqrt((1 - delta**2) * Kint * (r_tan * (1 - delta**2)))
+    cos_kappa_tan = numerator / denom
+
+    xi_tan = np.arccos(np.clip(cos_xi_tan, -1.0, 1.0))
+    kappa_tan = np.arccos(np.clip(cos_kappa_tan, -1.0, 1.0))
+    psi_bullet = abs(xi_tan) + abs(kappa_tan)          # eq. (58)
+
+    # eq. (56)
+    cos_psi = np.dot(r12, r13) / (r12_mag * r13_mag)
+
+    # eq. (57)
+    return cos_psi >= np.cos(psi_bullet)
