@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
 from functions import angle_between_vectors
 from astropy.constants import R_sun
-from poliastro.bodies import Venus
+# from poliastro.bodies import Venus
+from astropy import units as u
+R_venus = 6051.8 * u.km
+R_mars = 3395 * u.km
 
 
 # Get the position vectors of Venus and Mars from JPL Horizons
@@ -41,26 +44,38 @@ v_m_pos = np.array(s_v_pos) - np.array(s_m_pos)
 
 # Use the cross product to find the angle between the two position vectors
 R_sun_au = R_sun.to("au").value
-R_venus_au = Venus.R.to("au").value
+R_venus_au = R_venus.to("au").value
+R_mars_au = R_mars.to("au").value
+
 
 theta = []
 alpha_sun = []
 alpha_venus = []
 transit_threshold = []
+antumbra_threshold = []
 for i in range(len(v_m_pos)):
     theta.append(angle_between_vectors(v_m_pos[i], -np.array(s_m_pos[i])))
     alpha_sun = np.arctan(R_sun_au / np.linalg.norm(s_m_pos[i]))
     alpha_venus = np.arctan(R_venus_au / np.linalg.norm(v_m_pos[i]))
     transit_threshold.append(alpha_sun + alpha_venus)
+    antumbra_threshold.append(alpha_sun - alpha_venus)
 
 min_theta = min(theta)
 min_index = theta.index(min_theta)
+cone_separation_condition = np.arctan(0.0026158 / 1.55)
+mars_venus_seperation = angle_between_vectors(s_v_pos[min_index], s_m_pos[min_index])
+alpha_mars =  np.arctan(R_mars_au / np.linalg.norm(s_m_pos[min_index]))
+print(f'cone_separation_condition: {cone_separation_condition}')
+print(f'minimums mars venus separation: {mars_venus_seperation}')
+print(f'angular size of mars from sun: {alpha_mars}')
+
 min_jd = datetime_jd[min_index]
 print(min_index)
 print(min_jd)
 
 plt.plot(datetime_jd, theta, label='Angle')
 plt.plot(datetime_jd, transit_threshold, label='Transit Threshold')
+plt.plot(datetime_jd, antumbra_threshold, label='Antumbra Threshold')
 plt.xlabel('Julian Date')
 plt.ylabel('Angle (rad)')
 plt.title('Angle between Venus and Sun over Time')
