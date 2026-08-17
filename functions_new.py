@@ -87,3 +87,28 @@ def transit_visible_from_mars(R1, R2, R3, r12, r13):
 
     # eq. (57)
     return cos_psi >= np.cos(psi_bullet)
+
+def circle_overlap_area(R1, R2, d):
+    """
+    Calculate the area of overlap between two circles.
+
+    R1 : radius of circle 1
+    R2 : radius of circle 2
+    d  : distance between their centres
+
+    All quantities must use the same units.
+    """
+
+    # No overlap
+    if d >= R1 + R2:
+        return 0.0
+
+    # One circle completely inside the other
+    if d <= abs(R1 - R2):
+        return np.pi * min(R1, R2)**2
+
+    # Partial overlap
+    alpha = np.arccos((d**2 + R1**2 - R2**2) / (2 * d * R1))
+    beta = np.arccos((d**2 + R2**2 - R1**2) / (2 * d * R2))
+    area = (R1**2 * alpha + R2**2 * beta - 0.5 * np.sqrt((-d + R1 + R2) * (d + R1 - R2) * (d - R1 + R2) * (d + R1 + R2)))
+    return area
