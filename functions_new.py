@@ -112,3 +112,40 @@ def circle_overlap_area(R1, R2, d):
     beta = np.arccos((d**2 + R2**2 - R1**2) / (2 * d * R2))
     area = (R1**2 * alpha + R2**2 * beta - 0.5 * np.sqrt((-d + R1 + R2) * (d + R1 - R2) * (d - R1 + R2) * (d + R1 + R2)))
     return area
+
+
+def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
+    if isinstance(R_venus_au, float):
+        depth = []
+        for i in range(len(theta)):
+            alpha_venus = R_venus_au / np.linalg.norm(v_m_pos[i])
+            overlap = circle_overlap_area(alpha_sun[i], alpha_venus, theta[i])
+            sun_area = np.pi * alpha_sun[i] ** 2
+            depth.append(overlap / sun_area)
+    if isinstance(R_venus_au, (list, np.ndarray)):
+        depth = []
+        for i in range(len(theta)):
+            alpha_venus = R_venus_au[i] / np.linalg.norm(v_m_pos[i])   # small-angle approx, matches your arctan usage
+            overlap = circle_overlap_area(alpha_sun[i], alpha_venus[i], theta[i])
+            sun_area = np.pi * alpha_sun[i] ** 2
+            depth.append(overlap / sun_area)
+    return depth
+
+
+# --- toy cross-section models: REPLACE with real line-list / HITRAN data ---
+
+def sigma_rayleigh(wavelength_nm, sigma_ref=5e-31, lambda_ref_nm=550):
+    """Placeholder Rayleigh-scattering continuum, sigma ~ lambda^-4 (m^2)."""
+    return sigma_ref * (lambda_ref_nm / wavelength_nm) ** 4
+
+
+def sigma_with_band(wavelength_nm, band_center_nm, band_width_nm,
+                     band_peak_sigma, sigma_ref=5e-31, lambda_ref_nm=550):
+    """Rayleigh continuum plus one toy Gaussian absorption band, standing
+    in for a real molecular feature (e.g. SO2/CO2) -- for illustration
+    only, not a physical cross-section."""
+    continuum = sigma_rayleigh(wavelength_nm, sigma_ref, lambda_ref_nm)
+    band = band_peak_sigma * np.exp(
+        -0.5 * ((wavelength_nm - band_center_nm) / band_width_nm) ** 2
+    )
+    return continuum + band

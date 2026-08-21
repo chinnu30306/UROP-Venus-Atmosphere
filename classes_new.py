@@ -1,6 +1,8 @@
 import numpy as np
 from functions_new import angle_between_vectors, rotate_to_mars_frame, rotate_to_sun_frame, quadric
-
+from scipy.integrate import quad
+from scipy.constants import Boltzmann as k_B
+from astropy import units as u
 
 class Grid():
     def __init__(self, rows, cols, R):
@@ -159,3 +161,62 @@ class Cone():
         J = self.R1 * self.delta * z12 / r12
         K = -self.R1 ** 2
         return [A, B, C, D, E, F, G, H, J, K]
+
+
+class VenusAtmosphere:
+    def __init__(self, R_cloud_top_km, T_atm, mu, g, n0):
+        """
+        R_cloud_top_km : radius of the opaque cloud deck (km) -- the
+                          hard edge below which T=0 at every wavelength
+        T_atm          : temperature of the semi-transparent haze/upper
+                          atmosphere above the cloud deck (K)
+        mu             : mean molecular mass of that layer (kg/molecule)
+        g              : gravitational acceleration used for the scale
+                          height (m/s^2)
+        n0             : number density at the cloud top (molecules/m^3)
+        """
+        self.R_cloud_top = R_cloud_top_km * 1e3   # km -> m
+        self.T_atm = T_atm
+        self.mu = mu
+        self.g = g
+        self.n0 = n0
+        self.H = k_B * T_atm / (mu * g)            # scale height (m)
+
+    # ---- step 1: n(h) ----
+    def number_density(self, h):
+        """h = altitude above the cloud deck (m), h >= 0."""
+        return self.n0 * np.exp(-h / self.H)
+
+    # ---- step 2: N(b) ----
+    def column_density(self, b):
+        """h(x) = sqrt(b^2 + x^2) - R_cloud_top along the ray."""
+        if b < self.R_cloud_top:
+            return np.inf
+        integrand = lambda x: self.number_density(np.hypot(b, x) - self.R_cloud_top)
+        x_max = 50 * self.H   # density is negligible well beyond this
+        half, _ = quad(integrand, 0, x_max)
+        return 2 * half       # symmetric ray, +x and -x
+
+    # ---- step 3: tau_lambda(b) ----
+    def optical_depth(self, b, sigma_lambda):
+        """sigma_lambda: cross-section (m^2/molecule) at this wavelength."""
+        if b < self.R_cloud_top:
+            return np.inf
+        return self.column_density(b) * sigma_lambda
+
+    # ---- step 4: T_lambda(b) ----
+    def transmission(self, b, sigma_lambda):
+        tau = self.optical_depth(b, sigma_lambda)
+        return np.exp(-tau) if np.isfinite(tau) else 0.0
+
+    # ---- step 5: R_eff(lambda) ----
+    def effective_radius_au(self, sigma_lambda, n_scale_heights=15):
+        """
+        opaque disk area plus the partially-transmissive annulus above it,
+        weighted by (1-T(b)); returns AU.
+        """
+        b_max = self.R_cloud_top + n_scale_heights * self.H
+        integrand = lambda b: b * (1 - self.transmission(b, sigma_lambda))
+        annulus_integral, _ = quad(integrand, self.R_cloud_top, b_max)
+        R_eff_sq = self.R_cloud_top**2 + 2 * annulus_integral
+        return np.sqrt(R_eff_sq) / 1.495978707e11
