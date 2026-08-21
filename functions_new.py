@@ -1,6 +1,12 @@
 import numpy as np
 from astropy.time import Time
 import spiceypy as spice
+# import hapi
+
+# # Use HTTPS directly instead of HTTP
+# hapi.GLOBAL_HOST = 'https://hitran.org'
+
+from hapi import db_begin, fetch, absorptionCoefficient_Voigt
 
 def angle_between_vectors(v1, v2):
     v1 = np.array(v1)
@@ -149,3 +155,227 @@ def sigma_with_band(wavelength_nm, band_center_nm, band_width_nm,
         -0.5 * ((wavelength_nm - band_center_nm) / band_width_nm) ** 2
     )
     return continuum + band
+
+
+
+def get_sigma_lambda_from_hitran(
+    molecule='CO2',
+    isotopologue=1,
+    wl_min_nm=1200,
+    wl_max_nm=2600,
+    temperature=230,
+    pressure=1.0,
+    resolution_cm=0.01,
+    cache_dir='hitran_data',
+    return_wavenumber=False
+):
+    """
+    Calculate absorption cross-section (sigma_lambda) for a given molecule
+    using the HITRAN database via HAPI.
+    
+    Parameters:
+    -----------
+    molecule : str
+        Molecule name (e.g., 'CO2', 'CH4', 'H2O')
+    isotopologue : int
+        Isotopologue ID (1 = main isotope)
+    wl_min_nm, wl_max_nm : float
+        Wavelength range in nanometers
+    temperature : float
+        Temperature in Kelvin (e.g., 230 K for Venus upper atmosphere)
+    pressure : float
+        Pressure in atmospheres (e.g., 1.0 atm)
+    resolution_cm : float
+        Spectral resolution in wavenumber (cm^-1)
+        Lower values = higher resolution (e.g., 0.01 for high-res)
+    cache_dir : str
+        Directory to store downloaded HITRAN data
+    return_wavenumber : bool
+        If True, also return wavenumber array in cm^-1
+    
+    Returns:
+    --------
+    wavelengths_nm : numpy.ndarray
+        Wavelengths in nanometers
+    sigma_lambda : numpy.ndarray
+        Absorption cross-section in cm²/molecule
+    (Optional) wavenumber_cm : numpy.ndarray
+        Wavenumber in cm^-1
+    """
+    
+    # Initialize HAPI database
+    db_begin(cache_dir)
+    
+    # Convert wavelength (nm) to wavenumber (cm^-1)
+    # 1 cm^-1 = 1 / (wavelength in cm) = 1 / (wavelength in nm * 1e-7)
+    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
+    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
+    
+    # print(f"Fetching {molecule} data from {wavenumber_min:.1f} to {wavenumber_max:.1f} cm^-1...")
+    # print(f"  This corresponds to {wl_min_nm:.0f} to {wl_max_nm:.0f} nm")
+    
+    # Download data from HITRAN
+    # Molecule IDs: 2 = CO2, 6 = CH4, 1 = H2O, etc.
+    molecule_ids = {
+        'CO2': 2,
+        'CH4': 6,
+        'H2O': 1,
+        'CO': 5,
+        'SO2': 9,
+        'N2O': 4,
+        'O3': 3,
+    }
+    
+    mol_id = molecule_ids.get(molecule, 2)  # Default to CO2
+    
+    try:
+        fetch(molecule, mol_id, isotopologue, wavenumber_min, wavenumber_max)
+        print(f"Successfully fetched {molecule} data")
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        print("Make sure you have an internet connection.")
+        print("If this keeps failing, try using a different wavenumber range.")
+        raise
+    
+    # Create wavenumber grid
+    wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
+    
+    # Calculate absorption coefficient using Voigt profile
+    # print(f"Calculating absorption coefficient at T={temperature}K, P={pressure}atm...")
+    # print(f"  Resolution: {resolution_cm} cm^-1 ({len(wavenumber_cm)} points)")
+    
+    try:
+        # Calculate absorption coefficient
+        # HITRAN_units=True returns cross-section in cm²/molecule
+        nu, coef = absorptionCoefficient_Voigt(
+            SourceTables=molecule,
+            WavenumberGrid=wavenumber_cm,
+            Environment={'p': pressure, 'T': temperature},
+            HITRAN_units=True  # Returns cm²/molecule
+        )
+    except TypeError:
+        # Fallback for older HAPI versions
+        nu, coef = absorptionCoefficient_Voigt(
+            SourceTables=molecule,
+            WavenumberGrid=wavenumber_cm,
+            Environment={'p': pressure, 'T': temperature}
+        )
+    
+    # Convert wavenumber (cm^-1) to wavelength (nm)
+    # wavenumber = 1 / (wavelength in cm)
+    # wavelength (nm) = 1 / (wavenumber * 10000)
+    wavelengths_nm = 1.0 / (nu * 1e7 / 1e9)  # 1 cm^-1 = 10^7 / nm
+    # Simpler: wavelengths_nm = 1e7 / nu
+    
+    # Cross-section is already in cm²/molecule from HITRAN_units=True
+    sigma_lambda = coef
+    
+    # print(f"Cross-section range: {sigma_lambda.min():.2e} to {sigma_lambda.max():.2e} cm²/molecule")
+    # print(f"Wavelength range: {wavelengths_nm.min():.1f} to {wavelengths_nm.max():.1f} nm")
+    
+    if return_wavenumber:
+        return wavelengths_nm, sigma_lambda, nu
+    return wavelengths_nm, sigma_lambda
+
+
+def create_interpolator(wavelengths_nm, sigma_lambda):
+    """
+    Create an interpolation function for sigma_lambda at arbitrary wavelengths.
+    
+    Parameters:
+    -----------
+    wavelengths_nm : numpy.ndarray
+        Wavelengths in nanometers
+    sigma_lambda : numpy.ndarray
+        Absorption cross-section in cm²/molecule
+    
+    Returns:
+    --------
+    function : Interpolation function sigma(wavelength_nm)
+    """
+    from scipy.interpolate import interp1d
+    
+    # Create interpolation function
+    # Fill with small value outside range (or nearest)
+    sigma_interp = interp1d(
+        wavelengths_nm,
+        sigma_lambda,
+        kind='linear',
+        bounds_error=False,
+        fill_value=sigma_lambda.min()  # Use minimum as fill value
+    )
+    
+    return sigma_interp
+
+
+# ============================================================================
+# Example usage with your VenusAtmosphere class
+# ============================================================================
+
+def sigma_for_venus_atmosphere(wavelength_nm, temperature=230, pressure=1.0):
+    """
+    Wrapper function that provides sigma_lambda for use with your VenusAtmosphere class.
+    Uses cached HITRAN data for CO2.
+    """
+    # Static cache to avoid re-downloading
+    if not hasattr(sigma_for_venus_atmosphere, 'cache'):
+        # First call: download and cache
+        wl_nm, sigma = get_sigma_lambda_from_hitran(
+            molecule='CO2',
+            isotopologue=1,
+            wl_min_nm=300,
+            wl_max_nm=5000,
+            temperature=temperature,
+            pressure=pressure,
+            resolution_cm=0.1,  # Lower resolution for faster calculation
+            cache_dir='hitran_data'
+        )
+        sigma_for_venus_atmosphere.cache = (wl_nm, sigma)
+        sigma_for_venus_atmosphere.interp = create_interpolator(wl_nm, sigma)
+    
+    # Return interpolated value
+    return sigma_for_venus_atmosphere.interp(wavelength_nm)
+
+
+if __name__ == "__main__":
+    # Test the function
+    
+    # 1. Get CO2 cross-section for Venus-like conditions
+    wavelengths, sigma = get_sigma_lambda_from_hitran(
+        molecule='CO2',
+        wl_min_nm=2000,
+        wl_max_nm=5000,
+        temperature=230,
+        pressure=1.0,
+        resolution_cm=0.1
+    )
+    
+    # 2. Plot the result
+    import matplotlib.pyplot as plt
+    
+    plt.figure(figsize=(12, 6))
+    plt.plot(wavelengths, sigma, 'b-', linewidth=1)
+    plt.xlabel('Wavelength (nm)')
+    plt.ylabel('Cross-section (cm²/molecule)')
+    plt.title('CO₂ Absorption Cross-section at Venus Upper Atmosphere Conditions (230K, 1 atm)')
+    plt.yscale('log')
+    plt.grid(True, alpha=0.3)
+    
+    # Mark key CO2 bands
+    for band in [2000, 2700, 4300]:  # nm
+        plt.axvline(x=band, color='red', linestyle='--', alpha=0.5)
+        plt.text(band, plt.ylim()[1]*0.9, f'{band} nm', rotation=90, fontsize=8)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # 3. Example of using with your VenusAtmosphere class
+    print("\n" + "="*60)
+    print("Example: Using sigma_lambda with VenusAtmosphere")
+    print("="*60)
+    
+    # Test interpolation
+    test_wavelengths = [2000, 2700, 4300, 5000]
+    for wl in test_wavelengths:
+        sigma_val = sigma_for_venus_atmosphere(wl)
+        print(f"sigma({wl} nm) = {sigma_val:.2e} cm²/molecule")
