@@ -121,20 +121,10 @@ def circle_overlap_area(R1, R2, d):
 
 
 def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
-    if isinstance(R_venus_au, float):
-        depth = []
-        for i in range(len(theta)):
-            alpha_venus = R_venus_au / np.linalg.norm(v_m_pos[i])
-            overlap = circle_overlap_area(alpha_sun[i], alpha_venus, theta[i])
-            sun_area = np.pi * alpha_sun[i] ** 2
-            depth.append(overlap / sun_area)
-    if isinstance(R_venus_au, (list, np.ndarray)):
-        depth = []
-        for i in range(len(theta)):
-            alpha_venus = R_venus_au[i] / np.linalg.norm(v_m_pos[i])   # small-angle approx, matches your arctan usage
-            overlap = circle_overlap_area(alpha_sun[i], alpha_venus[i], theta[i])
-            sun_area = np.pi * alpha_sun[i] ** 2
-            depth.append(overlap / sun_area)
+    alpha_venus = R_venus_au / np.linalg.norm(v_m_pos)
+    overlap = circle_overlap_area(alpha_sun, alpha_venus, theta)
+    sun_area = np.pi * alpha_sun ** 2
+    depth = overlap / sun_area
     return depth
 
 
@@ -224,6 +214,7 @@ def get_sigma_lambda_from_hitran(
         'SO2': 9,
         'N2O': 4,
         'O3': 3,
+        'N2': 7
     }
     
     mol_id = molecule_ids.get(molecule, 2)  # Default to CO2
@@ -264,11 +255,11 @@ def get_sigma_lambda_from_hitran(
     # Convert wavenumber (cm^-1) to wavelength (nm)
     # wavenumber = 1 / (wavelength in cm)
     # wavelength (nm) = 1 / (wavenumber * 10000)
-    wavelengths_nm = 1.0 / (nu * 1e7 / 1e9)  # 1 cm^-1 = 10^7 / nm
-    # Simpler: wavelengths_nm = 1e7 / nu
+    # wavelengths_nm = 1.0 / (nu * 1e7 / 1e9)  # 1 cm^-1 = 10^7 / nm
+    wavelengths_nm = 1e7 / nu
     
     # Cross-section is already in cm²/molecule from HITRAN_units=True
-    sigma_lambda = coef
+    sigma_lambda = coef * 1e-4
     
     # print(f"Cross-section range: {sigma_lambda.min():.2e} to {sigma_lambda.max():.2e} cm²/molecule")
     # print(f"Wavelength range: {wavelengths_nm.min():.1f} to {wavelengths_nm.max():.1f} nm")
@@ -306,76 +297,3 @@ def create_interpolator(wavelengths_nm, sigma_lambda):
     )
     
     return sigma_interp
-
-
-# ============================================================================
-# Example usage with your VenusAtmosphere class
-# ============================================================================
-
-def sigma_for_venus_atmosphere(wavelength_nm, temperature=230, pressure=1.0):
-    """
-    Wrapper function that provides sigma_lambda for use with your VenusAtmosphere class.
-    Uses cached HITRAN data for CO2.
-    """
-    # Static cache to avoid re-downloading
-    if not hasattr(sigma_for_venus_atmosphere, 'cache'):
-        # First call: download and cache
-        wl_nm, sigma = get_sigma_lambda_from_hitran(
-            molecule='CO2',
-            isotopologue=1,
-            wl_min_nm=300,
-            wl_max_nm=5000,
-            temperature=temperature,
-            pressure=pressure,
-            resolution_cm=0.1,  # Lower resolution for faster calculation
-            cache_dir='hitran_data'
-        )
-        sigma_for_venus_atmosphere.cache = (wl_nm, sigma)
-        sigma_for_venus_atmosphere.interp = create_interpolator(wl_nm, sigma)
-    
-    # Return interpolated value
-    return sigma_for_venus_atmosphere.interp(wavelength_nm)
-
-
-if __name__ == "__main__":
-    # Test the function
-    
-    # 1. Get CO2 cross-section for Venus-like conditions
-    wavelengths, sigma = get_sigma_lambda_from_hitran(
-        molecule='CO2',
-        wl_min_nm=2000,
-        wl_max_nm=5000,
-        temperature=230,
-        pressure=1.0,
-        resolution_cm=0.1
-    )
-    
-    # 2. Plot the result
-    import matplotlib.pyplot as plt
-    
-    plt.figure(figsize=(12, 6))
-    plt.plot(wavelengths, sigma, 'b-', linewidth=1)
-    plt.xlabel('Wavelength (nm)')
-    plt.ylabel('Cross-section (cm²/molecule)')
-    plt.title('CO₂ Absorption Cross-section at Venus Upper Atmosphere Conditions (230K, 1 atm)')
-    plt.yscale('log')
-    plt.grid(True, alpha=0.3)
-    
-    # Mark key CO2 bands
-    for band in [2000, 2700, 4300]:  # nm
-        plt.axvline(x=band, color='red', linestyle='--', alpha=0.5)
-        plt.text(band, plt.ylim()[1]*0.9, f'{band} nm', rotation=90, fontsize=8)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # 3. Example of using with your VenusAtmosphere class
-    print("\n" + "="*60)
-    print("Example: Using sigma_lambda with VenusAtmosphere")
-    print("="*60)
-    
-    # Test interpolation
-    test_wavelengths = [2000, 2700, 4300, 5000]
-    for wl in test_wavelengths:
-        sigma_val = sigma_for_venus_atmosphere(wl)
-        print(f"sigma({wl} nm) = {sigma_val:.2e} cm²/molecule")

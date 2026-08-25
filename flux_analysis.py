@@ -30,14 +30,16 @@ for i in range(len(v_m_pos)):
 
 mid_transit_idx = int(np.argmin(theta))
 
-depth = transit_depth(R_venus_au, v_m_pos, alpha_sun, theta)
+flux_opaque_ppm = []
+for i in range(len(theta)):
+    depth = transit_depth(R_venus_au, v_m_pos[i], alpha_sun[i], theta[i])
+    flux_opaque_ppm.append((1 - depth) * 1e6)
 
-flux_opaque_ppm = (1 - np.array(depth)) * 1e6
 plt.figure(figsize=(9, 5))
-plt.plot(datetime_jd, flux_opaque_ppm)
+plt.plot(datetime_jd, np.array(flux_opaque_ppm))
 plt.xlabel("Julian Date")
 plt.ylabel("Flux (ppm)")
-plt.title("Solid-body Venus transit depth as seen from Mars")
+plt.title("Solid-body transit depth")
 plt.grid()
 plt.show()
 
@@ -52,20 +54,32 @@ atmosphere = VenusAtmosphere(
 )
 
 # --- transmission spectrum at mid-transit: loop steps 1-5 over wavelength ---
-wavelengths_nm, sigma_lambda = np.array(get_sigma_lambda_from_hitran())
+wavelengths_nm, sigma_lambda = np.array(get_sigma_lambda_from_hitran(resolution_cm=1.0))
+venus_molecules = {'CO2': 0.965, 'N2':  0.035, 'SO2': 1e-4, 'H2O': 1e-5, 'CO':  1e-5}
+sigma_total = []
 
-R_eff_au, depth_ppm = [], []
-for i in range(len(wavelengths_nm)):
-    R_eff = atmosphere.effective_radius_au(sigma_lambda[i])
+sigma_total = np.zeros(len(wavelengths_nm))
+
+for molecule, mixing_ratio in venus_molecules.items():
+    wl, sigma = get_sigma_lambda_from_hitran(molecule=molecule, resolution_cm=1.0)
+    sigma_total += mixing_ratio * sigma
+    
+R_eff_au, flux_transparent_ppm = [], []
+v_mid = v_m_pos[mid_transit_idx]
+alpha_sun_mid = alpha_sun[mid_transit_idx]
+theta_mid = theta[mid_transit_idx]
+
+for sigma in sigma_total:
+    R_eff = atmosphere.effective_radius_au(sigma)
     R_eff_au.append(R_eff)
-    depth_mid = transit_depth(R_eff, v_m_pos, alpha_sun, theta)[mid_transit_idx]
-    depth_ppm.append((1 - depth_mid) * 1e6)
+    depth_mid = transit_depth(R_eff, v_mid, alpha_sun_mid, theta_mid)
+    flux_transparent_ppm.append((1 - depth_mid) * 1e6)
 
 
 fig1, ax1 = plt.subplots(figsize=(9, 5))
-ax1.plot(wavelengths_nm, np.array(depth_ppm))
-ax1.set_xlabel("Wavelength (nm)")
-ax1.set_ylabel("Transit depth (ppm)")
-ax1.set_title("Transmission spectrum at mid-transit (Venus atmosphere, toy model)")
+ax1.plot(wavelengths_nm, np.array(flux_transparent_ppm))
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Flux (ppm)")
+plt.title("CO₂ atmosphere transit depth")
 ax1.grid()
 plt.show()
