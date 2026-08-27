@@ -1,10 +1,68 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from functions_new import angle_between_vectors, transit_depth, get_sigma_lambda_from_hitran
+from functions_new import angle_between_vectors, transit_depth, get_sigma_lambda_from_hitran, extract_profile
 from astropy.constants import R_sun
 from poliastro.bodies import Mars, Venus
 from classes_new import VenusAtmosphere
+from pathlib import Path
+import numpy as np
+from scipy.interpolate import interp1d
+
+from astropy.table import Table
+
+filename = "molecules_data/SO2.xml"
+
+table = Table.read(filename, format="votable")
+
+print(table.colnames)
+
+for col in table.colnames:
+    print(
+        col,
+        "unit =", table[col].unit,
+        "description =", table[col].description
+    )
+
+species = ['CO.xml', 'CO2.xml', 'H2O.xml', 'HCL.xml', 'HF.xml', 'H2CO.xml', 'HCN.xml', 'HO2.xml', 'N2O.xml', 'NH3.xml', 'NO.xml', 'NO2.xml', 'O3.xml', 'CS.xml', 'CS2.xml', 'OCS.xml', 'SO2.xml', 'SO3.xml']
+path = Path("/Users/chinmayib/git/UROP-Venus-Atmosphere/molecules_data")
+profiles = {}
+
+for filename in species:
+    filepath = path / filename
+    profile = extract_profile(filepath)
+    species_name = filepath.stem
+    profiles[species_name] = profile
+
+alt_km, temp_K, pres_Pa, dens_kgpmc = np.loadtxt("VIRA_noheader.csv", dtype=float, delimiter=',', unpack=True, usecols=(0, 1, 2, 3))
+
+alt_grid = np.arange(75.0, 110.0 + 0.1, 0.1)
+interpolated_profiles = {}
+
+for species_name, profile in profiles.items():
+    altitude = np.asarray(profile["alt"], dtype=float)
+    number_density = np.asarray(profile["n"], dtype=float)
+
+    sort_idx = np.argsort(altitude)
+    altitude = altitude[sort_idx]
+    number_density = number_density[sort_idx]
+    log_n = np.log(number_density)
+
+    interpolation = interp1d(altitude, log_n, kind="linear", bounds_error=False, fill_value="extrapolate")
+    log_n_grid = interpolation(alt_grid)
+    n_grid = np.exp(log_n_grid)
+
+    interpolated_profiles[species_name] = {"alt": alt_grid, "n": n_grid}
+
+
+# plt.plot(interpolated_profiles["CO2"]["alt"], interpolated_profiles["CO2"]["n"], label='CO2')
+# plt.plot(interpolated_profiles["SO2"]["alt"], interpolated_profiles["SO2"]["n"], label='SO2')
+plt.plot(interpolated_profiles["CO2"]["alt"], interpolated_profiles["SO2"]["n"]/(interpolated_profiles["CO2"]["n"]*1e6), label='CO2')
+plt.title("Number density against altitude")
+plt.xlabel("Altitude/km")
+plt.ylabel("Number density/cm^-3")
+plt.legend()
+plt.show()
 
 
 s_v = Horizons(id=299, location='500@10', epochs={'start': '2030-08-19', 'stop': '2030-08-21', 'step': '1min'})
@@ -80,6 +138,6 @@ fig1, ax1 = plt.subplots(figsize=(9, 5))
 ax1.plot(wavelengths_nm, np.array(flux_transparent_ppm))
 plt.xlabel("Wavelength (nm)")
 plt.ylabel("Flux (ppm)")
-plt.title("CO₂ atmosphere transit depth")
+plt.title("With-atmosphere transit depth")
 ax1.grid()
 plt.show()

@@ -1,12 +1,9 @@
 import numpy as np
 from astropy.time import Time
 import spiceypy as spice
-# import hapi
-
-# # Use HTTPS directly instead of HTTP
-# hapi.GLOBAL_HOST = 'https://hitran.org'
-
 from hapi import db_begin, fetch, absorptionCoefficient_Voigt
+from astropy.table import Table
+from scipy.interpolate import interp1d
 
 def angle_between_vectors(v1, v2):
     v1 = np.array(v1)
@@ -284,7 +281,6 @@ def create_interpolator(wavelengths_nm, sigma_lambda):
     --------
     function : Interpolation function sigma(wavelength_nm)
     """
-    from scipy.interpolate import interp1d
     
     # Create interpolation function
     # Fill with small value outside range (or nearest)
@@ -297,3 +293,14 @@ def create_interpolator(wavelengths_nm, sigma_lambda):
     )
     
     return sigma_interp
+
+
+def extract_profile(filename):
+    table = Table.read(filename, format="votable")
+    if "n_sh0.1" in table.colnames:
+        profile = table[["alt", "n_sh0.1", "err_n_sh0.1"]]
+        profile.rename_column("n_sh0.1", "n")
+        profile.rename_column("err_n_sh0.1", "err_n")
+    elif "n" in table.colnames:
+        profile = table
+    return profile
