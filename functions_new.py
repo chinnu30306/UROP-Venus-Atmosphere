@@ -148,8 +148,8 @@ def sigma_with_band(wavelength_nm, band_center_nm, band_width_nm,
 def get_sigma_lambda_from_hitran(
     molecule='CO2',
     isotopologue=1,
-    wl_min_nm=1200,
-    wl_max_nm=2600,
+    wl_min_nm=2000,
+    wl_max_nm=5000,
     temperature=230,
     pressure=1.0,
     resolution_cm=0.01,
@@ -297,10 +297,6 @@ def create_interpolator(wavelengths_nm, sigma_lambda):
 
 def extract_profile(filename):
     table = Table.read(filename, format="votable")
-    if "n_sh0.1" in table.colnames:
-        profile = table[["alt", "n_sh0.1", "err_n_sh0.1"]]
-        profile.rename_column("n_sh0.1", "n")
-        profile.rename_column("err_n_sh0.1", "err_n")
-    elif "n" in table.colnames:
-        profile = table
+    profile = table[["alt", "p", "t", "n_sh0.5"]]
+    profile.rename_column("n_sh0.5", "n")
     return profile

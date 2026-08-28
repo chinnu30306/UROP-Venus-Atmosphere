@@ -9,30 +9,18 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import interp1d
 
-from astropy.table import Table
+# from astropy.table import Table
 
-# filename = "molecules_data/SO2.xml"
-
+# filename = "number_density_data/CO2.xml"
 # table = Table.read(filename, format="votable")
-
 # print(table.colnames)
 
 # for col in table.colnames:
-#     print(
-#         col,
-#         "unit =", table[col].unit,
-#         "description =", table[col].description
-#     )
+#     print(col, "unit =", table[col].unit, "description =", table[col].description)
 
-so2 = Table.read("molecules_data/SO2.xml", format="votable")
 
-print(so2["n"].description)
-print(so2["n"].meta)
-
-print(so2.meta)
-
-species = ['CO.xml', 'CO2.xml', 'H2O.xml', 'HCL.xml', 'HF.xml', 'H2CO.xml', 'HCN.xml', 'HO2.xml', 'N2O.xml', 'NH3.xml', 'NO.xml', 'NO2.xml', 'O3.xml', 'CS.xml', 'CS2.xml', 'OCS.xml', 'SO2.xml', 'SO3.xml']
-path = Path("/Users/chinmayib/git/UROP-Venus-Atmosphere/molecules_data")
+species = ['CO.xml', 'CO2.xml', 'H2O.xml', 'HCL.xml', 'HF.xml']
+path = Path("/Users/chinmayib/git/UROP-Venus-Atmosphere/number_density_data")
 profiles = {}
 
 for filename in species:
@@ -48,32 +36,52 @@ interpolated_profiles = {}
 
 for species_name, profile in profiles.items():
     altitude = np.asarray(profile["alt"], dtype=float)
+    pressure = np.asarray(profile["p"], dtype=float)
+    temperature = np.asarray(profile["t"], dtype=float)
     number_density = np.asarray(profile["n"], dtype=float)
 
     sort_idx = np.argsort(altitude)
     altitude = altitude[sort_idx]
-    number_density = number_density[sort_idx]
-    log_n = np.log(number_density)
+    log_p = np.log(pressure[sort_idx])
+    log_t = np.log(temperature[sort_idx])
+    log_n = np.log(number_density[sort_idx])
 
-    interpolation = interp1d(altitude, log_n, kind="linear", bounds_error=False, fill_value="extrapolate")
-    log_n_grid = interpolation(alt_grid)
-    n_grid = np.exp(log_n_grid)
+    p_grid = np.exp(interp1d(altitude, log_p, kind="linear", bounds_error=False, fill_value="extrapolate")(alt_grid))
+    t_grid = np.exp(interp1d(altitude, log_t, kind="linear", bounds_error=False, fill_value="extrapolate")(alt_grid))
+    n_grid = np.exp(interp1d(altitude, log_n, kind="linear", bounds_error=False, fill_value="extrapolate")(alt_grid))
 
-    interpolated_profiles[species_name] = {"alt": alt_grid, "n": n_grid}
+    interpolated_profiles[species_name] = {"alt": alt_grid, "p": p_grid, "t": t_grid, "n": n_grid}
 
 
-for species, profile in interpolated_profiles.items():
-    # if profile["n"][0] > interpolated_profiles["CO2"]["n"][0]:
-    #     n = profile["n"] * 1e-6
-    # else:
-    #     n = profile["n"]
-    plt.plot(profile["alt"], profile["n"], label=species)
+fig, axes = plt.subplots(3, 1, figsize=(9, 9))
 
-plt.title("Number density against altitude")
-plt.xlabel("Altitude / km")
-plt.ylabel(r"Number density / cm$^{-3}$")
-plt.yscale("log")
-plt.legend()
+axes[0].plot(profile["alt"], profile["p"], label='VIRA')
+axes[0].plot(interpolated_profiles['CO2']['alt'], interpolated_profiles['CO2']['p'], label='SPICAV-SOIR')
+axes[0].set_xlabel("Altitude / km")
+axes[0].set_ylabel("Pressure / mbar")
+axes[0].set_title("Pressure against altitude for 75-110km")
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+axes[1].plot(profile["alt"], profile["t"], label='VIRA')
+axes[1].plot(interpolated_profiles['CO2']['alt'], interpolated_profiles['CO2']['t'], label='SPICAV-SOIR')
+axes[1].set_xlabel("Altitude / km")
+axes[1].set_ylabel("Temperature / K")
+axes[1].set_title("Temperature against altitude for 75-110km")
+axes[1].legend()
+axes[1].grid(True, alpha=0.3)
+
+for species, prof in interpolated_profiles.items():
+    axes[2].plot(prof["alt"], prof["n"], label=species)
+
+axes[2].set_title("Number density against altitude for 75-110km from SPICAV-SOIR")
+axes[2].set_xlabel("Altitude / km")
+axes[2].set_ylabel(r"Number density / cm$^{-3}$")
+axes[2].set_yscale("log")
+axes[2].legend()
+axes[2].grid(True, alpha=0.3)
+
+plt.tight_layout()
 plt.show()
 
 
