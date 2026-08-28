@@ -11,18 +11,25 @@ from scipy.interpolate import interp1d
 
 from astropy.table import Table
 
-filename = "molecules_data/SO2.xml"
+# filename = "molecules_data/SO2.xml"
 
-table = Table.read(filename, format="votable")
+# table = Table.read(filename, format="votable")
 
-print(table.colnames)
+# print(table.colnames)
 
-for col in table.colnames:
-    print(
-        col,
-        "unit =", table[col].unit,
-        "description =", table[col].description
-    )
+# for col in table.colnames:
+#     print(
+#         col,
+#         "unit =", table[col].unit,
+#         "description =", table[col].description
+#     )
+
+so2 = Table.read("molecules_data/SO2.xml", format="votable")
+
+print(so2["n"].description)
+print(so2["n"].meta)
+
+print(so2.meta)
 
 species = ['CO.xml', 'CO2.xml', 'H2O.xml', 'HCL.xml', 'HF.xml', 'H2CO.xml', 'HCN.xml', 'HO2.xml', 'N2O.xml', 'NH3.xml', 'NO.xml', 'NO2.xml', 'O3.xml', 'CS.xml', 'CS2.xml', 'OCS.xml', 'SO2.xml', 'SO3.xml']
 path = Path("/Users/chinmayib/git/UROP-Venus-Atmosphere/molecules_data")
@@ -55,12 +62,17 @@ for species_name, profile in profiles.items():
     interpolated_profiles[species_name] = {"alt": alt_grid, "n": n_grid}
 
 
-# plt.plot(interpolated_profiles["CO2"]["alt"], interpolated_profiles["CO2"]["n"], label='CO2')
-# plt.plot(interpolated_profiles["SO2"]["alt"], interpolated_profiles["SO2"]["n"], label='SO2')
-plt.plot(interpolated_profiles["CO2"]["alt"], interpolated_profiles["SO2"]["n"]/(interpolated_profiles["CO2"]["n"]*1e6), label='CO2')
+for species, profile in interpolated_profiles.items():
+    # if profile["n"][0] > interpolated_profiles["CO2"]["n"][0]:
+    #     n = profile["n"] * 1e-6
+    # else:
+    #     n = profile["n"]
+    plt.plot(profile["alt"], profile["n"], label=species)
+
 plt.title("Number density against altitude")
-plt.xlabel("Altitude/km")
-plt.ylabel("Number density/cm^-3")
+plt.xlabel("Altitude / km")
+plt.ylabel(r"Number density / cm$^{-3}$")
+plt.yscale("log")
 plt.legend()
 plt.show()
 
