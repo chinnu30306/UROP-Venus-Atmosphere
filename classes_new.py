@@ -164,59 +164,60 @@ class Cone():
 
 
 class VenusAtmosphere:
-    def __init__(self, R_cloud_top_km, T_atm, mu, g, n0):
-        """
-        R_cloud_top_km : radius of the opaque cloud deck (km) -- the
-                          hard edge below which T=0 at every wavelength
-        T_atm          : temperature of the semi-transparent haze/upper
-                          atmosphere above the cloud deck (K)
-        mu             : mean molecular mass of that layer (kg/molecule)
-        g              : gravitational acceleration used for the scale
-                          height (m/s^2)
-        n0             : number density at the cloud top (molecules/m^3)
-        """
-        self.R_cloud_top = R_cloud_top_km * 1e3   # km -> m
-        self.T_atm = T_atm
-        self.mu = mu
-        self.g = g
-        self.n0 = n0
-        self.H = k_B * T_atm / (mu * g)            # scale height (m)
+    def __init__(self, R_cloud_top_km, alt_min_km, alt_max_km, species_profiles):
+        self.R_cloud_top = R_cloud_top_km * 1e3
+        self.alt_min_m = alt_min_km * 1e3
+        self.alt_max_m = alt_max_km * 1e3
+        self.species_profiles = species_profiles
 
     # ---- step 1: n(h) ----
-    def number_density(self, h):
+    def number_density(self, h, species):
         """h = altitude above the cloud deck (m), h >= 0."""
-        return self.n0 * np.exp(-h / self.H)
+        return self.species_profiles[species]["n"](self.R_cloud_top + h)
 
     # ---- step 2: N(b) ----
-    def column_density(self, b):
+    def column_density(self, b, species):
         """h(x) = sqrt(b^2 + x^2) - R_cloud_top along the ray."""
-        if b < self.R_cloud_top:
-            return np.inf
-        integrand = lambda x: self.number_density(np.hypot(b, x) - self.R_cloud_top)
-        x_max = 50 * self.H   # density is negligible well beyond this
-        half, _ = quad(integrand, 0, x_max)
-        return 2 * half       # symmetric ray, +x and -x
+        self.R_top = self.R_cloud_top + self.alt_max_m   # in __init__
+
+        # column_density:
+        x_max = np.sqrt(self.R_top**2 - b**2)
+
+        # effective_radius_au:
+        b_min = self.R_cloud_top
+        b_max = self.R_top
+
+        def integrand(x):
+            h = np.hypot(b, x) - self.R_cloud_top
+            return self.number_density(h, species)
+        
+        half, _ = quad(integrand, 0, x_max, limit=200)
+        return 2 * half
 
     # ---- step 3: tau_lambda(b) ----
-    def optical_depth(self, b, sigma_lambda):
+    def optical_depth(self, b, species, sigma_lambda):
         """sigma_lambda: cross-section (m^2/molecule) at this wavelength."""
-        if b < self.R_cloud_top:
-            return np.inf
-        return self.column_density(b) * sigma_lambda
+        return self.column_density(b, species) * sigma_lambda
 
     # ---- step 4: T_lambda(b) ----
-    def transmission(self, b, sigma_lambda):
-        tau = self.optical_depth(b, sigma_lambda)
-        return np.exp(-tau) if np.isfinite(tau) else 0.0
+    def transmission(self, b, sigma_dict):
+        tau_total = 0
+        for species, sigma in sigma_dict.items():
+            tau_total += self.optical_depth(b, species, sigma)
+        return np.exp(-tau_total)
 
     # ---- step 5: R_eff(lambda) ----
-    def effective_radius_au(self, sigma_lambda, n_scale_heights=15):
+    def effective_radius_au(self, sigma_dict):
         """
         opaque disk area plus the partially-transmissive annulus above it,
         weighted by (1-T(b)); returns AU.
         """
-        b_max = self.R_cloud_top + n_scale_heights * self.H
-        integrand = lambda b: b * (1 - self.transmission(b, sigma_lambda))
-        annulus_integral, _ = quad(integrand, self.R_cloud_top, b_max)
+        b_min = self.R_cloud_top
+        b_max = self.alt_max_m
+        
+        def integrand(b):
+            return b * (1 - self.transmission(b, sigma_dict))
+        
+        annulus_integral, _ = quad(integrand, b_min, b_max, limit=200)
         R_eff_sq = self.R_cloud_top**2 + 2 * annulus_integral
         return np.sqrt(R_eff_sq) / 1.495978707e11

@@ -256,7 +256,7 @@ def get_sigma_lambda_from_hitran(
     wavelengths_nm = 1e7 / nu
     
     # Cross-section is already in cm²/molecule from HITRAN_units=True
-    sigma_lambda = coef * 1e-4
+    sigma_lambda = coef
     
     # print(f"Cross-section range: {sigma_lambda.min():.2e} to {sigma_lambda.max():.2e} cm²/molecule")
     # print(f"Wavelength range: {wavelengths_nm.min():.1f} to {wavelengths_nm.max():.1f} nm")
@@ -300,3 +300,49 @@ def extract_profile(filename):
     profile = table[["alt", "p", "t", "n_sh0.5"]]
     profile.rename_column("n_sh0.5", "n")
     return profile
+
+
+def get_sigma_lambda(
+    molecule,
+    temperature_K,
+    pressure_atm,
+    wl_min_nm=2000,
+    wl_max_nm=5000,
+    resolution_cm=0.01,
+    isotopologue=1,
+    cache_dir="hitran_data"
+):
+
+    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
+    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
+
+    db_begin(cache_dir)
+
+    molecule_ids = {
+        "H2O": 1,
+        "CO2": 2,
+        "CO": 5,
+        "HCL": 15,
+        "HF": 14,
+        "PH3": 28
+    }
+
+    mol_id = molecule_ids[molecule]
+
+    fetch(molecule, mol_id, isotopologue, wavenumber_min, wavenumber_max)
+
+    wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
+
+    nu, sigma_cm2 = absorptionCoefficient_Voigt(
+        SourceTables=molecule,
+        WavenumberGrid=wavenumber_cm,
+        Environment={
+            "p": pressure_atm,
+            "T": temperature_K
+        },
+        HITRAN_units=True
+    )
+
+    wavelengths_nm = 1e7 / nu
+
+    return wavelengths_nm, sigma_cm2
