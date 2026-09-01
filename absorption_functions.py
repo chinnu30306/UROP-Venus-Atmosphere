@@ -1,5 +1,5 @@
 """
-functions_new.py
+absorption_functions.py
 
 Rewritten support functions for the Venus transit / transmission-spectrum
 pipeline. Key changes from the previous version:
@@ -31,29 +31,6 @@ AU_M = 1.495978707e11
 
 
 # ---------------------------------------------------------------------------
-# Transit geometry (unchanged from before -- these were fine)
-# ---------------------------------------------------------------------------
-
-def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
-    """
-    R_venus_au: apparent radius of the occulting body (Venus or R_eff), in AU
-                *as seen from Mars* -- i.e. already an angular-equivalent
-                radius, matching how alpha_sun is computed.
-    v_m_pos:    Venus-minus-Mars position vector (au), used only for its norm.
-    alpha_sun, theta: angular sun radius and separation angle, radians.
-
-    NOTE: this assumes angle_between_vectors() and circle_overlap_area() are
-    supplied elsewhere (unchanged) -- they weren't part of the code you
-    pasted, so they are not touched here.
-    """
-    alpha_venus = R_venus_au / np.linalg.norm(v_m_pos)
-    overlap = circle_overlap_area(alpha_sun, alpha_venus, theta)  # noqa: F821
-    sun_area = np.pi * alpha_sun ** 2
-    depth = overlap / sun_area
-    return depth
-
-
-# ---------------------------------------------------------------------------
 # Toy cross-section models (kept for testing/sanity checks only)
 # ---------------------------------------------------------------------------
 
@@ -80,12 +57,7 @@ def sigma_with_band(wavelength_nm, band_center_nm, band_width_nm,
 MOLECULE_IDS = {
     "H2O": 1,
     "CO2": 2,
-    "O3": 3,
-    "N2O": 4,
     "CO": 5,
-    "CH4": 6,
-    "N2": 7,
-    "SO2": 9,
     "HF": 14,
     "HCL": 15,
     "PH3": 28,

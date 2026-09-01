@@ -1,8 +1,6 @@
 import numpy as np
-from functions_new import angle_between_vectors, rotate_to_mars_frame, rotate_to_sun_frame, quadric
-from scipy.integrate import quad
-from scipy.constants import Boltzmann as k_B
-from astropy import units as u
+from functions_new import angle_between_vectors, rotate_to_frame, quadric
+
 
 class Grid():
     def __init__(self, rows, cols, R):
@@ -67,11 +65,6 @@ class Planet():
         r13 = self.pos()          # Sun -> Mars
         R3 = self.rad()
 
-        # angular test: is Mars even close enough to the Sun-Venus line
-        # to be plausibly in transit? (cheap early-out, not required
-        # for correctness since the quadratic below returns None anyway)
-        # Solve |t*venus_pos - r13|^2 = R3^2 for t (Sun->Venus line
-        # parametrised as t*venus_pos, since the Sun is the origin).
         a = np.dot(venus_pos, venus_pos)
         b = -2 * np.dot(venus_pos, r13)
         c = np.dot(r13, r13) - R3 * R3
@@ -82,7 +75,7 @@ class Planet():
         t = min(np.roots([a, b, c]))     # near-side (Sun-facing) root
         Q = t * venus_pos                # heliocentric point on Mars's surface
         R_m_vec = Q - r13                # relative to Mars's centre
-        R_prime = rotate_to_mars_frame(time, R_m_vec)
+        R_prime = rotate_to_frame(time, R_m_vec, "ECLIPJ2000", "IAU_MARS")
 
         lat = np.degrees(np.arctan2(R_prime[2], np.hypot(R_prime[0], R_prime[1])))
         lon = np.degrees(np.arctan2(R_prime[1], R_prime[0]))
@@ -98,21 +91,13 @@ class Planet():
 
         for i in range(self.grid.get_rows()):
             for j in range(self.grid.get_cols()):
-                # body-fixed offset -> ECLIPJ2000-oriented offset (still
-                # centred on Mars)
-                R_vec = rotate_to_sun_frame(time, self.grid.R_prime[i, j])
+                R_vec = rotate_to_frame(time, self.grid.R_prime[i, j], "IAU_MARS", "ECLIPJ2000")
 
-                # skip Mars's own night side: a point that isn't facing
-                # the Sun can't be showing a transit shadow regardless
-                # of cone geometry
                 if angle_between_vectors(R_vec, sun_dir_from_mars) > np.pi / 2:
                     continue
 
                 point = R_vec + self.pos()        # heliocentric position
 
-                # restrict to the physically relevant nappe (Veras 2019,
-                # footnote 2): points with cos(xi) < 0 sit mathematically
-                # inside the same quadric but on the far side of the Sun
                 cos_xi = np.dot(point, cone.r12) / (
                     np.linalg.norm(point) * cone.r12_mag
                 )
@@ -161,63 +146,3 @@ class Cone():
         J = self.R1 * self.delta * z12 / r12
         K = -self.R1 ** 2
         return [A, B, C, D, E, F, G, H, J, K]
-
-
-class VenusAtmosphere:
-    def __init__(self, R_cloud_top_km, alt_min_km, alt_max_km, species_profiles):
-        self.R_cloud_top = R_cloud_top_km * 1e3
-        self.alt_min_m = alt_min_km * 1e3
-        self.alt_max_m = alt_max_km * 1e3
-        self.species_profiles = species_profiles
-
-    # ---- step 1: n(h) ----
-    def number_density(self, h, species):
-        """h = altitude above the cloud deck (m), h >= 0."""
-        return self.species_profiles[species]["n"](self.R_cloud_top + h)
-
-    # ---- step 2: N(b) ----
-    def column_density(self, b, species):
-        """h(x) = sqrt(b^2 + x^2) - R_cloud_top along the ray."""
-        self.R_top = self.R_cloud_top + self.alt_max_m   # in __init__
-
-        # column_density:
-        x_max = np.sqrt(self.R_top**2 - b**2)
-
-        # effective_radius_au:
-        b_min = self.R_cloud_top
-        b_max = self.R_top
-
-        def integrand(x):
-            h = np.hypot(b, x) - self.R_cloud_top
-            return self.number_density(h, species)
-        
-        half, _ = quad(integrand, 0, x_max, limit=200)
-        return 2 * half
-
-    # ---- step 3: tau_lambda(b) ----
-    def optical_depth(self, b, species, sigma_lambda):
-        """sigma_lambda: cross-section (m^2/molecule) at this wavelength."""
-        return self.column_density(b, species) * sigma_lambda
-
-    # ---- step 4: T_lambda(b) ----
-    def transmission(self, b, sigma_dict):
-        tau_total = 0
-        for species, sigma in sigma_dict.items():
-            tau_total += self.optical_depth(b, species, sigma)
-        return np.exp(-tau_total)
-
-    # ---- step 5: R_eff(lambda) ----
-    def effective_radius_au(self, sigma_dict):
-        """
-        opaque disk area plus the partially-transmissive annulus above it,
-        weighted by (1-T(b)); returns AU.
-        """
-        b_min = self.R_cloud_top
-        b_max = self.alt_max_m
-        
-        def integrand(b):
-            return b * (1 - self.transmission(b, sigma_dict))
-        
-        annulus_integral, _ = quad(integrand, b_min, b_max, limit=200)
-        R_eff_sq = self.R_cloud_top**2 + 2 * annulus_integral
-        return np.sqrt(R_eff_sq) / 1.495978707e11

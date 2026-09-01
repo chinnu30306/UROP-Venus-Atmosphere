@@ -21,6 +21,7 @@ parameters b (~6.1e6 m, a radius from the centre).
 
 import numpy as np
 
+_trapz = getattr(np, "trapezoid", None) or np.trapz
 
 AU_M = 1.495978707e11
 
@@ -82,7 +83,7 @@ class VenusAtmosphere:
             sigma_vals = sigma_interp(r)
             tau_half += n_vals * sigma_vals
 
-        tau = 2.0 * np.trapz(tau_half, x)
+        tau = 2.0 * _trapz(tau_half, x)
         return tau
 
     def transmission(self, b, sigma_interp_dict, n_x=400):
@@ -103,7 +104,7 @@ class VenusAtmosphere:
             1.0 - self.transmission(b, sigma_interp_dict, n_x=n_x)
             for b in b_grid
         ])
-        annulus_integral = np.trapz(b_grid * one_minus_T, b_grid)
+        annulus_integral = _trapz(b_grid * one_minus_T, b_grid)
 
         R_eff_sq = self.R_base ** 2 + 2.0 * annulus_integral
         return np.sqrt(R_eff_sq)
