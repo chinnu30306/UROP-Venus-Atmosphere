@@ -111,10 +111,6 @@ def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
                 radius, matching how alpha_sun is computed.
     v_m_pos:    Venus-minus-Mars position vector (au), used only for its norm.
     alpha_sun, theta: angular sun radius and separation angle, radians.
-
-    NOTE: this assumes angle_between_vectors() and circle_overlap_area() are
-    supplied elsewhere (unchanged) -- they weren't part of the code you
-    pasted, so they are not touched here.
     """
     alpha_venus = R_venus_au / np.linalg.norm(v_m_pos)
     overlap = circle_overlap_area(alpha_sun, alpha_venus, theta)  # noqa: F821

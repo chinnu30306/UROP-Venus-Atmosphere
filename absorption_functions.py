@@ -1,63 +1,51 @@
-"""
-absorption_functions.py
-
-Rewritten support functions for the Venus transit / transmission-spectrum
-pipeline. Key changes from the previous version:
-
-  * All geometry below this module is in METERS and all cross-sections in
-    m^2/molecule; conversions from HITRAN's cm^2/molecule happen at the
-    single point they enter the pipeline (build_sigma_interp_dict).
-  * Number-density profiles are turned into *interpolators over radius from
-    Venus's centre* (r_m), not over a bare altitude array, so they can be
-    evaluated directly at any point along a ray (see classes_new.py).
-  * Added ph3_profile_from_vmr(): since PH3 (unlike CO/CO2/H2O/HCl/HF) may
-    not have its own retrieved density profile, this builds one from a
-    constant volume-mixing-ratio (default 20 ppb) applied to the total
-    atmospheric density from VIRA T(h), P(h) via the ideal gas law.
-"""
-
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.constants import k as K_BOLTZMANN
 from astropy.table import Table
+import miepython
 
 import ssl
-# Disable SSL certificate verification (HITRAN download workaround)
 ssl._create_default_https_context = ssl._create_unverified_context
-
 from hapi import db_begin, fetch, absorptionCoefficient_Voigt
 
 AU_M = 1.495978707e11
 
 
-# ---------------------------------------------------------------------------
-# Toy cross-section models (kept for testing/sanity checks only)
-# ---------------------------------------------------------------------------
-
-def sigma_rayleigh(wavelength_nm, sigma_ref=5e-31, lambda_ref_nm=550):
-    """Placeholder Rayleigh-scattering continuum, sigma ~ lambda^-4 (m^2)."""
+def sigma_rayleigh(wavelength_nm, sigma_ref=6.5e-31, lambda_ref_nm=550):
+    """Rayleigh-scattering for CO2, sigma ~ lambda^-4 (m^2)."""
     return sigma_ref * (lambda_ref_nm / wavelength_nm) ** 4
 
 
-def sigma_with_band(wavelength_nm, band_center_nm, band_width_nm,
-                     band_peak_sigma, sigma_ref=5e-31, lambda_ref_nm=550):
-    """Rayleigh continuum plus one toy Gaussian absorption band -- for
-    illustration/testing only, not a physical cross-section."""
-    continuum = sigma_rayleigh(wavelength_nm, sigma_ref, lambda_ref_nm)
-    band = band_peak_sigma * np.exp(
-        -0.5 * ((wavelength_nm - band_center_nm) / band_width_nm) ** 2
-    )
-    return continuum + band
+def mie_efficiencies(radius_um, wavelength_nm, refractive_index):
+    """
+    radius_um:        particle radius, microns
+    wavelength_nm:     wavelength, nm
+    refractive_index:  complex refractive index m = n - i*k
+    """
+    wavelength_um = wavelength_nm * 1e-3
+    size_parameter = 2 * np.pi * radius_um / wavelength_um
+    qext, qsca, qback, g = miepython.efficiencies_mx(refractive_index, size_parameter)
+    return qext, qsca
+ 
+ 
+def sigma_mie(radius_um, wavelength_nm, refractive_index):
+    radius_m = radius_um * 1e-6
+    qext, _ = mie_efficiencies(radius_um, wavelength_nm, refractive_index)
+    return qext * np.pi * radius_m ** 2
+ 
+ 
+def constant_sigma_interp(sigma_value):
+    def _interp(r):
+        return np.full_like(np.asarray(r, dtype=float), float(sigma_value))
+    return _interp
 
 
-# ---------------------------------------------------------------------------
-# HITRAN cross-sections
-# ---------------------------------------------------------------------------
 
 MOLECULE_IDS = {
     "H2O": 1,
     "CO2": 2,
     "CO": 5,
+    "SO2": 9,
     "HF": 14,
     "HCL": 15,
     "PH3": 28,
@@ -65,12 +53,6 @@ MOLECULE_IDS = {
 
 
 def wavelength_grid_nm(wl_min_nm, wl_max_nm, resolution_cm):
-    """
-    Build a wavelength grid directly, evenly spaced in wavenumber (the
-    natural HITRAN axis), without needing to run a throwaway HITRAN fetch
-    just to get an x-axis (the old code called get_sigma_lambda_from_hitran
-    purely to obtain wavelengths_nm and discarded its sigma_lambda).
-    """
     wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
     wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
     wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
@@ -88,12 +70,6 @@ def get_sigma_lambda(
     isotopologue=1,
     cache_dir="hitran_data",
 ):
-    """
-    Absorption cross-section (cm^2/molecule) for `molecule` at a single
-    (T, P), across [wl_min_nm, wl_max_nm]. Returns (wavelengths_nm, sigma_cm2)
-    -- wavelengths_nm is DEscending in nm-space if wavenumber is ascending;
-    it is returned sorted ascending in wavelength for convenience.
-    """
     if molecule not in MOLECULE_IDS:
         raise ValueError(f"Unknown molecule '{molecule}'; add it to MOLECULE_IDS.")
     mol_id = MOLECULE_IDS[molecule]
@@ -116,25 +92,9 @@ def get_sigma_lambda(
 
     wavelengths_nm = 1e7 / nu
 
-    # sort ascending in wavelength for downstream interp1d convenience
     order = np.argsort(wavelengths_nm)
     return wavelengths_nm[order], sigma_cm2[order]
 
-
-def create_interpolator(wavelengths_nm, sigma_lambda):
-    """Interpolator for sigma_lambda(wavelength_nm), clamped at the edges."""
-    return interp1d(
-        wavelengths_nm,
-        sigma_lambda,
-        kind="linear",
-        bounds_error=False,
-        fill_value=(sigma_lambda[0], sigma_lambda[-1]),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Profile ingestion
-# ---------------------------------------------------------------------------
 
 def extract_profile(filename):
     table = Table.read(filename, format="votable")
@@ -143,18 +103,37 @@ def extract_profile(filename):
     return profile
 
 
+def extract_aerosol_profile(filename):
+    table = Table.read(filename, format="votable")
+    return table[["alt", "p", "beta"]]
+ 
+ 
+def aerosol_number_density_from_beta(beta_per_km, wavelength_ref_nm,
+                                       radius_um, refractive_index):
+    """
+    beta(h) = n(h) * sigma_ext(radius, wavelength_ref)
+    n(h)    = beta(h) / sigma_ext(radius, wavelength_ref)
+    """
+    beta_per_m = np.asarray(beta_per_km, dtype=float) / 1e3  # km^-1 -> m^-1
+    sigma_ext_m2 = sigma_mie(radius_um, wavelength_ref_nm, refractive_index)
+    return beta_per_m / sigma_ext_m2
+ 
+ 
+def build_aerosol_profile_for_atmosphere(alt_km, beta_per_km, wavelength_ref_nm,
+                                           radius_um, refractive_index, R_venus_m):
+    n_m3 = aerosol_number_density_from_beta(
+        beta_per_km, wavelength_ref_nm, radius_um, refractive_index
+    )
+    r_m = R_venus_m + np.asarray(alt_km, dtype=float) * 1e3
+    n_interp = interp1d(
+        r_m, n_m3, kind="linear", bounds_error=False,
+        fill_value=(n_m3[0], n_m3[-1]),
+    )
+    return {"n_interp": n_interp}
+
+
 def build_species_profiles_for_atmosphere(interpolated_profiles, R_venus_m,
                                             n_units_per_cm3=True):
-    """
-    Convert {species: {"alt": km, "p", "t", "n"}} (as produced by your
-    VIRA/SPICAV interpolation block) into the format VenusAtmosphere needs:
-    {species: {"n_interp": callable(r_m) -> number density in molecules/m^3}}
-
-    IMPORTANT: this assumes the input "n" arrays are in cm^-3 (the usual
-    convention for these retrievals -- n_units_per_cm3=True applies the
-    x1e6 conversion to m^-3). If your SPICAV-SOIR files are already in
-    m^-3, call with n_units_per_cm3=False.
-    """
     species_profiles = {}
     for species_name, prof in interpolated_profiles.items():
         alt_km = np.asarray(prof["alt"], dtype=float)
@@ -174,17 +153,8 @@ def build_species_profiles_for_atmosphere(interpolated_profiles, R_venus_m,
 
 def ph3_profile_from_vmr(alt_grid_km, temp_K, pres_atm, R_venus_m, vmr=20e-9):
     """
-    Build a PH3 number-density profile from a constant volume mixing ratio
-    (default 20 ppb, the reported Venus cloud-deck PH3 abundance) applied to
-    the total atmospheric density implied by VIRA T(h), P(h):
-
-        n_total(h) = P(h) / (k_B * T(h))      [ideal gas law, molecules/m^3]
-        n_PH3(h)   = vmr * n_total(h)
-
-    Use this if you don't have a dedicated PH3 density retrieval the way you
-    do for CO/CO2/H2O/HCl/HF. Returns the same {"n_interp": ...} format as
-    build_species_profiles_for_atmosphere, ready to drop into
-    species_profiles["PH3"].
+    n_total(h) = P(h) / (k_B * T(h))      [ideal gas law, molecules/m^3]
+    n_PH3(h)   = vmr * n_total(h)
     """
     alt_grid_km = np.asarray(alt_grid_km, dtype=float)
     temp_K = np.asarray(temp_K, dtype=float)
@@ -203,16 +173,6 @@ def ph3_profile_from_vmr(alt_grid_km, temp_K, pres_atm, R_venus_m, vmr=20e-9):
 
 def build_sigma_interp_dict(species_list, sigma_dict_alt, test_alts_km,
                               wl_idx, R_venus_m):
-    """
-    For a single wavelength index `wl_idx`, build
-    {species: interp1d(r_m) -> cross-section (m^2/molecule)}
-    from sigma_dict_alt[species] of shape (n_test_alts, n_wavelengths),
-    which is in cm^2/molecule (HITRAN_units=True convention).
-
-    This is what lets sigma vary *with altitude* (via T, P) as you walk
-    along a ray in VenusAtmosphere.tau_of_b -- rather than picking one
-    cross-section for the whole atmosphere.
-    """
     r_test_m = R_venus_m + np.asarray(test_alts_km, dtype=float) * 1e3
     sigma_interp_dict = {}
     for species in species_list:

@@ -1,5 +1,5 @@
 import numpy as np
-from functions_new import angle_between_vectors, rotate_to_frame, quadric
+from geometric_functions import angle_between_vectors, rotate_to_frame, quadric
 
 
 class Grid():
