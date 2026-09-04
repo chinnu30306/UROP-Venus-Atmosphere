@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from classes_new import Planet, Cone
-from functions_new import transit_visible_from_mars
+from geometric_classes import Planet, Cone
+from geometric_functions import transit_visible_from_mars
 from astropy.constants import R_sun
 from poliastro.bodies import Mars, Venus
 from matplotlib.patches import Rectangle

@@ -117,3 +117,61 @@ def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
     sun_area = np.pi * alpha_sun ** 2
     depth = overlap / sun_area
     return depth
+
+
+def get_grazing_coordinates(datetime_jd, mars_pos, venus_pos, R_venus_au, R_atm_km=120.0):
+    """
+    Get the grazing point coordinates working entirely in AU.
+    
+    Parameters:
+    -----------
+    datetime_jd : float
+        Julian date at mid-transit
+    mars_pos : array-like
+        Mars position relative to Sun (AU)
+    venus_pos : array-like
+        Venus position relative to Sun (AU)
+    R_venus_au : float
+        Venus radius in AU
+    R_atm_km : float
+        Atmospheric radius in km (default: 120 km to match VOTable coordinates)
+    
+    Returns:
+    --------
+    tuple : (longitude_deg, latitude_deg)
+    """
+    
+    AU_TO_KM = 149597870.7
+    R_atm_au = R_atm_km / AU_TO_KM
+    
+    ray_dir = mars_pos / np.linalg.norm(mars_pos)
+    
+    s_tangent = np.dot(venus_pos, ray_dir)  # in AU
+    tangent_point_au = s_tangent * ray_dir  # in AU
+    
+    R_effective_au = R_venus_au + R_atm_au
+    
+    dir_from_venus = tangent_point_au - venus_pos
+    dir_from_venus = dir_from_venus / np.linalg.norm(dir_from_venus)
+    
+    grazing_icrf_au = venus_pos + R_effective_au * dir_from_venus
+    
+    grazing_icrf_km = grazing_icrf_au * AU_TO_KM
+    
+    grazing_venus_km = rotate_to_frame(
+        datetime_jd,
+        grazing_icrf_km,
+        'J2000',
+        'IAU_VENUS'
+    )
+    
+    x, y, z = grazing_venus_km
+    r = np.linalg.norm(grazing_venus_km)
+    
+    lon = np.degrees(np.arctan2(y, x))
+    lat = np.degrees(np.arcsin(z / r))
+    
+    if lon < 0:
+        lon += 360
+    
+    return (lon, lat)

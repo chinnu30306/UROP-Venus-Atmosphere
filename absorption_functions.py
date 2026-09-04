@@ -60,6 +60,14 @@ def wavelength_grid_nm(wl_min_nm, wl_max_nm, resolution_cm):
     return wavelengths_nm, wavenumber_cm
 
 
+def parse_species_isotopologue(species_key):
+    base_molecule, iso_str = species_key.rsplit("_", 1)
+    iso_id = int(iso_str)
+    if iso_id == 0:
+        iso_id = 1  # "_0" = main/default isotopologue = HITRAN iso 1
+    return base_molecule, iso_id
+
+
 def get_sigma_lambda(
     molecule,
     temperature_K,
@@ -79,19 +87,20 @@ def get_sigma_lambda(
     wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
     wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
 
-    fetch(molecule, mol_id, isotopologue, wavenumber_min, wavenumber_max)
+    table_name = f"{molecule}_{isotopologue}"
+
+    fetch(table_name, mol_id, isotopologue, wavenumber_min, wavenumber_max)
 
     wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
 
     nu, sigma_cm2 = absorptionCoefficient_Voigt(
-        SourceTables=molecule,
+        SourceTables=table_name,
         WavenumberGrid=wavenumber_cm,
         Environment={"p": pressure_atm, "T": temperature_K},
-        HITRAN_units=True,  # cm^2/molecule
+        HITRAN_units=True,
     )
 
     wavelengths_nm = 1e7 / nu
-
     order = np.argsort(wavelengths_nm)
     return wavelengths_nm[order], sigma_cm2[order]
 

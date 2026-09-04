@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.jplhorizons import Horizons
-from functions_new import angle_between_vectors
+from geometric_functions import angle_between_vectors
 from astropy.constants import R_sun
 from poliastro.bodies import Venus, Mars
-from classes_new import Cone
+from geometric_classes import Cone
 
 # Get the position vectors of Venus and Mars from JPL Horizons
 m_v = Horizons(id=299, location='499', epochs={'start': '2030-08-19', 'stop': '2030-08-21', 'step': '1min'})

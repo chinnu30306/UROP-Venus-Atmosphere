@@ -1,6 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import os
+import glob
+import shutil
+import pickle
+from astropy.io.votable import parse
 
 from astroquery.jplhorizons import Horizons
 import astropy.units as u
@@ -12,6 +17,7 @@ from absorption_functions import (
     get_sigma_lambda,
     extract_profile,
     wavelength_grid_nm,
+    parse_species_isotopologue,
     build_species_profiles_for_atmosphere,
     ph3_profile_from_vmr,
     build_sigma_interp_dict,
@@ -22,31 +28,8 @@ from absorption_functions import (
     constant_sigma_interp
 )
 
-from geometric_functions import angle_between_vectors, transit_depth
+from geometric_functions import angle_between_vectors, transit_depth, get_grazing_coordinates
 from absorption_classes import VenusAtmosphere
-from astropy.io.votable import parse
-
-# Parse the VOTable file
-votable = parse('number_density_data/CO2.xml')
-
-# Get the first resource and table
-table = votable.get_first_table()
-
-# Access PARAMs (metadata)
-params = table.params
-
-# Find latitude and longitude
-latitude = None
-longitude = None
-
-for param in params:
-    if param.name == 'latitude_120km':
-        latitude = float(param.value)
-    elif param.name == 'longitude_120km':
-        longitude = float(param.value)
-
-print(f"Latitude at 120 km: {latitude}°")
-print(f"Longitude at 120 km: {longitude}°")
 
 
 ALT_MIN_KM = 75.0
@@ -62,7 +45,21 @@ WL_MAX_NM = 5000
 RESOLUTION_CM = 1.0  # use 0.01 for better quality
 
 DATA_DIR = Path("number_density_data")   # adjust to your actual path
+NEW_DATA_DIR = Path("number_density_data_new")
+MIN_DATA_POINTS = 2
 VIRA_FILE = "VIRA_noheader.csv"
+
+
+alt_grid = np.arange(ALT_MIN_KM, ALT_MAX_KM + 0.1, 0.1)
+alt_km_v, temp_K_v, pres_Pa_v, dens_kgpmc_v = np.loadtxt(
+    VIRA_FILE, dtype=float, delimiter=",", unpack=True, usecols=(0, 1, 2, 3)
+)
+pres_atm_v = pres_Pa_v / 1.01325e5
+
+temp_VIRA = interp1d(alt_km_v, temp_K_v, kind="linear",
+                      bounds_error=False, fill_value="extrapolate")(alt_grid)
+pres_VIRA = interp1d(alt_km_v, pres_atm_v, kind="linear",
+                      bounds_error=False, fill_value="extrapolate")(alt_grid)
 
 
 R_venus_m = Venus.R.to_value(u.m)
@@ -92,6 +89,10 @@ v_mid = v_m_pos[mid_transit_idx]
 alpha_sun_mid = alpha_sun[mid_transit_idx]
 theta_mid = theta[mid_transit_idx]
 
+datetime_jd_mid = datetime_jd[mid_transit_idx]
+mars_pos_au = np.array(s_m_pos[mid_transit_idx])
+venus_pos_au = np.array(s_v_pos[mid_transit_idx])
+
 flux_opaque_ppm = []
 for i in range(len(theta)):
     depth = transit_depth(R_venus_au, v_m_pos[i], alpha_sun[i], theta[i])
@@ -106,25 +107,116 @@ plt.grid()
 plt.show()
 
 
+species_folders = ["CO_0", "CO2_0", "H2O_1", "H2O_4", "HCL_1", "HCL_2", "HF_1", "SO2_1", "AERO"]
 
-species_files = ["CO.xml", "CO2.xml", "H2O.xml", "HCL.xml", "HF.xml", "SO2.xml"]
-raw_profiles = {}
-for filename in species_files:
-    filepath = DATA_DIR / filename
-    raw_profiles[filepath.stem] = extract_profile(filepath)
-
-
-alt_km_v, temp_K_v, pres_Pa_v, dens_kgpmc_v = np.loadtxt(
-    VIRA_FILE, dtype=float, delimiter=",", unpack=True, usecols=(0, 1, 2, 3)
+target_lon, target_lat = get_grazing_coordinates(
+    datetime_jd_mid,
+    mars_pos_au,
+    venus_pos_au,
+    R_venus_au
 )
-pres_atm_v = pres_Pa_v / 1.01325e5
 
-alt_grid = np.arange(ALT_MIN_KM, ALT_MAX_KM + 0.1, 0.1)
+closest_files = {}
 
-temp_VIRA = interp1d(alt_km_v, temp_K_v, kind="linear",
-                      bounds_error=False, fill_value="extrapolate")(alt_grid)
-pres_VIRA = interp1d(alt_km_v, pres_atm_v, kind="linear",
-                      bounds_error=False, fill_value="extrapolate")(alt_grid)
+for folder in species_folders:  # Use 'folder' not 'species'
+    folder_path = DATA_DIR / folder
+    file_pattern = os.path.join(folder_path, "*.xml")
+    files = glob.glob(file_pattern)
+    
+    closest_file = None
+    min_distance = float('inf')
+    all_file_info = []
+    n_skipped_too_small = 0
+    
+    for file_path in files:
+        try:
+            votable = parse(file_path)
+            table = votable.get_first_table()
+            params = table.params
+
+            n_rows = len(table.array)
+            if n_rows < MIN_DATA_POINTS:
+                n_skipped_too_small += 1
+                continue
+            
+            lon = None
+            lat = None
+            
+            for param in params:
+                if param.name == 'longitude_120km':
+                    lon = float(param.value)
+                elif param.name == 'latitude_120km':
+                    lat = float(param.value)
+            
+            if lon is not None and lat is not None:
+                distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+                
+                file_info = {
+                    'file_path': file_path,
+                    'file_name': os.path.basename(file_path),
+                    'longitude': lon,
+                    'latitude': lat,
+                    'distance': distance,
+                    'n_rows': n_rows
+                }
+                all_file_info.append(file_info)
+                
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_file = file_info
+                    
+        except Exception as e:
+            continue
+
+    if n_skipped_too_small:
+        print(f"{folder:>10}: skipped {n_skipped_too_small} file(s) with "
+              f"< {MIN_DATA_POINTS} data points")
+    
+    if closest_file:
+        closest_files[folder] = closest_file
+        print(f"{folder:>10}: {closest_file['file_name']}")
+        print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
+        print(f"             Distance: {closest_file['distance']:.4f}°")
+    else:
+        closest_files[folder] = None
+        print(f"{folder:>10}: No valid VOTable files found")
+
+
+file_mapping = {}
+
+for folder, file_info in closest_files.items():
+    if file_info is None:
+        print(f"{folder:>10}: No file found - skipping")
+        continue
+    
+    original_path = file_info['file_path']
+    
+    new_filename = f"{folder}.xml"
+    
+    new_path = NEW_DATA_DIR / new_filename
+    
+    # Copy the file
+    try:
+        shutil.copy2(original_path, new_path)
+        file_mapping[folder] = {
+            'original': original_path,
+            'new': new_path,
+            'new_filename': new_filename,
+            'longitude': file_info['longitude'],
+            'latitude': file_info['latitude']
+        }
+        print(f"{folder:>10} → {new_filename}")
+        
+    except Exception as e:
+        print(f"{folder}: Error copying file: {e}")
+
+
+species_files = list(NEW_DATA_DIR.glob("*.xml"))
+raw_profiles = {}
+for filepath in species_files:
+    stem = filepath.stem
+    raw_profiles[stem] = extract_profile(filepath)
+
 
 interpolated_profiles = {}
 for species_name, profile in raw_profiles.items():
@@ -147,21 +239,22 @@ for species_name, profile in raw_profiles.items():
                               bounds_error=False, fill_value="extrapolate")(alt_grid))
 
     interpolated_profiles[species_name] = {
-        "alt": alt_grid, "p": p_grid, "t": t_grid, "n": n_grid
+        "alt": alt_grid, "p": p_grid / 1013.25, "t": t_grid, "n": n_grid
     }
 
 fig, axes = plt.subplots(3, 1, figsize=(9, 9))
 
-axes[0].plot(profile["alt"], profile["p"], label='VIRA')
-axes[0].plot(interpolated_profiles['CO']['alt'], interpolated_profiles['CO']['p'], label='SPICAV-SOIR')
+axes[0].plot(alt_grid, pres_VIRA, label='VIRA')
+axes[0].plot(interpolated_profiles['CO_0']['alt'], interpolated_profiles['CO_0']['p'], label='SPICAV-SOIR')
 axes[0].set_xlabel("Altitude / km")
-axes[0].set_ylabel("Pressure / mbar")
+axes[0].set_ylabel("Pressure / atm")
 axes[0].set_title("Pressure against altitude for 75-110km")
+axes[0].set_yscale("log")
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-axes[1].plot(profile["alt"], profile["t"], label='VIRA')
-axes[1].plot(interpolated_profiles['CO']['alt'], interpolated_profiles['CO']['t'], label='SPICAV-SOIR')
+axes[1].plot(alt_grid, temp_VIRA, label='VIRA')
+axes[1].plot(interpolated_profiles['CO_0']['alt'], interpolated_profiles['CO_0']['t'], label='SPICAV-SOIR')
 axes[1].set_xlabel("Altitude / km")
 axes[1].set_ylabel("Temperature / K")
 axes[1].set_title("Temperature against altitude for 75-110km")
@@ -180,7 +273,6 @@ axes[2].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.show()
-
 
 
 species_profiles = build_species_profiles_for_atmosphere(
@@ -212,7 +304,7 @@ species_profiles["AERO"] = build_aerosol_profile_for_atmosphere(
     wavelength_ref_nm=MIE_WAVELENGTH_REF_NM, radius_um=MIE_RADIUS_UM,
     refractive_index=MIE_REFRACTIVE_INDEX, R_venus_m=R_venus_m,
 )
-species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2"]  # same n(r), different sigma
+species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2_0"]  # same n(r), different sigma
 
 atmosphere = VenusAtmosphere(
     R_venus_m=R_venus_m,
@@ -225,26 +317,44 @@ atmosphere = VenusAtmosphere(
 wavelengths_nm, wavenumber_cm = wavelength_grid_nm(WL_MIN_NM, WL_MAX_NM, RESOLUTION_CM)
 test_alts_km = [75., 80., 85., 90., 95., 100., 105., 110.]
 
+species_isotopologue_map = {}
+for species_name in interpolated_profiles.keys():
+    species_isotopologue_map[species_name] = parse_species_isotopologue(species_name)
+
 sigma_dict_alt = {}  # species -> array [n_test_alts, n_wavelengths], cm^2/molecule
 for species_name in species_list:
+    if species_name == "PH3":
+        base_molecule, iso_id = "PH3", 1
+        t_arr = temp_VIRA
+        p_arr = pres_VIRA
+    else:
+        base_molecule, iso_id = species_isotopologue_map[species_name]
+        t_arr = interpolated_profiles[species_name]["t"]  # K
+        p_arr = interpolated_profiles[species_name]["p"]  # atm
+ 
     sigma_all_altitudes = []
     for alt in test_alts_km:
         idx = np.argmin(np.abs(alt_grid - alt))
-        T_alt = temp_VIRA[idx]
-        P_alt = pres_VIRA[idx]
+        T_alt = t_arr[idx]
+        P_alt = p_arr[idx]
+
+        if np.isnan(T_alt) or T_alt <= 0:
+            print(f"  Warning: Invalid T={T_alt} at {alt} km, using 250 K")
+            T_alt = 250.0
 
         wl, sigma = get_sigma_lambda(
-            molecule=species_name,
+            molecule=base_molecule,
             temperature_K=T_alt,
             pressure_atm=P_alt,
             wl_min_nm=WL_MIN_NM,
             wl_max_nm=WL_MAX_NM,
             resolution_cm=RESOLUTION_CM,
+            isotopologue=iso_id,
         )
-    
+ 
         sigma_on_grid = np.interp(wavelengths_nm, wl, sigma)
         sigma_all_altitudes.append(sigma_on_grid)
-
+ 
     sigma_dict_alt[species_name] = np.array(sigma_all_altitudes)
 
 

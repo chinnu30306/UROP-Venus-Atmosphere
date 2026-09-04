@@ -75,7 +75,7 @@ class Planet():
         t = min(np.roots([a, b, c]))     # near-side (Sun-facing) root
         Q = t * venus_pos                # heliocentric point on Mars's surface
         R_m_vec = Q - r13                # relative to Mars's centre
-        R_prime = rotate_to_frame(time, R_m_vec, "ECLIPJ2000", "IAU_MARS")
+        R_prime = rotate_to_frame(time, R_m_vec, "ICRF", "IAU_MARS")
 
         lat = np.degrees(np.arctan2(R_prime[2], np.hypot(R_prime[0], R_prime[1])))
         lon = np.degrees(np.arctan2(R_prime[1], R_prime[0]))
@@ -91,7 +91,7 @@ class Planet():
 
         for i in range(self.grid.get_rows()):
             for j in range(self.grid.get_cols()):
-                R_vec = rotate_to_frame(time, self.grid.R_prime[i, j], "IAU_MARS", "ECLIPJ2000")
+                R_vec = rotate_to_frame(time, self.grid.R_prime[i, j], "IAU_MARS", "ICRF")
 
                 if angle_between_vectors(R_vec, sun_dir_from_mars) > np.pi / 2:
                     continue
