@@ -1,5 +1,5 @@
 {
-  "table_name": "CO2_iso1",
+  "table_name": "CO_1",
   "number_of_rows": -1,
   "format": {
     "a": "%10.3E",
