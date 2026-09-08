@@ -4,18 +4,20 @@ from pathlib import Path
 import os
 import glob
 import shutil
-import pickle
 from astropy.io.votable import parse
-
 from astroquery.jplhorizons import Horizons
 import astropy.units as u
 from astropy.constants import R_sun
 from poliastro.bodies import Venus
 from scipy.interpolate import interp1d
+from astropy.io import fits
+import pandas as pd
+from astropy.table import Table
 
 from absorption_functions import (
     get_sigma_lambda,
     extract_profile,
+    extract_w23_long_lat,
     wavelength_grid_nm,
     parse_species_isotopologue,
     build_species_profiles_for_atmosphere,
@@ -32,9 +34,31 @@ from geometric_functions import angle_between_vectors, transit_depth, get_grazin
 from absorption_classes import VenusAtmosphere
 
 
+filename = "number_density_data/SOIRProfiles_AERO.xml"
+table = Table.read(filename, format="votable")
+print(table.colnames)
+
+# hdul = fits.open('lineplot_sn.fits')
+# data = hdul[1].data  # The data is in the second HDU (index 1)
+# df = pd.DataFrame(data)
+# df.to_csv('snr_vs_wavelength.csv')
+
+# wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
+
+# sort_idx = np.argsort(wl)
+# wl = wl[sort_idx]
+# snr = snr[sort_idx]
+
+# plt.plot(wl, snr)
+# plt.xlabel(f"Wavelength / um")
+# plt.ylabel("SNR")
+# plt.title("Instrument SNR vs wavelength (raw ETC output)")
+# plt.show()
+
+
 ALT_MIN_KM = 75.0
 ALT_MAX_KM = 110.0
-PH3_VMR = 0.8e-9  # strict upper limit of 0.8 ppb
+PH3_VMR = 20e-6  # strict upper limit of 0.8 ppb
 
 MIE_WAVELENGTH_REF_NM = 3000.0     # SOIR beta reference wavelength (3.0 um)
 MIE_RADIUS_UM = 0.15               # assumed effective particle radius
@@ -47,6 +71,7 @@ RESOLUTION_CM = 1.0  # use 0.01 for better quality
 DATA_DIR = Path("number_density_data")   # adjust to your actual path
 NEW_DATA_DIR = Path("number_density_data_new")
 MIN_DATA_POINTS = 2
+BASELINE_PPM = 1e6
 VIRA_FILE = "VIRA_noheader.csv"
 
 
@@ -107,7 +132,7 @@ plt.grid()
 plt.show()
 
 
-species_folders = ["CO_0", "CO2_0", "H2O_1", "H2O_4", "HCL_1", "HCL_2", "HF_1", "SO2_1", "AERO"]
+species_folders = ["CO_0", "CO2_0", "H2O_1", "H2O_4", "HCL_1", "HCL_2", "HF_1"]
 
 target_lon, target_lat = get_grazing_coordinates(
     datetime_jd_mid,
@@ -118,68 +143,109 @@ target_lon, target_lat = get_grazing_coordinates(
 
 closest_files = {}
 
-for folder in species_folders:  # Use 'folder' not 'species'
-    folder_path = DATA_DIR / folder
-    file_pattern = os.path.join(folder_path, "*.xml")
-    files = glob.glob(file_pattern)
+# for folder in species_folders:
+#     folder_path = DATA_DIR / folder
+#     file_pattern = os.path.join(folder_path, "*.xml")
+#     files = glob.glob(file_pattern)
     
-    closest_file = None
-    min_distance = float('inf')
-    all_file_info = []
-    n_skipped_too_small = 0
+#     closest_file = None
+#     min_distance = float('inf')
+#     all_file_info = []
+#     n_skipped_too_small = 0
     
-    for file_path in files:
-        try:
-            votable = parse(file_path)
-            table = votable.get_first_table()
-            params = table.params
+#     for file_path in files:
+#         votable = parse(file_path)
+#         table = votable.get_first_table()
+#         params = table.params
 
-            n_rows = len(table.array)
-            if n_rows < MIN_DATA_POINTS:
-                n_skipped_too_small += 1
-                continue
-            
-            lon = None
-            lat = None
-            
-            for param in params:
-                if param.name == 'longitude_120km':
-                    lon = float(param.value)
-                elif param.name == 'latitude_120km':
-                    lat = float(param.value)
-            
-            if lon is not None and lat is not None:
-                distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
-                
-                file_info = {
-                    'file_path': file_path,
-                    'file_name': os.path.basename(file_path),
-                    'longitude': lon,
-                    'latitude': lat,
-                    'distance': distance,
-                    'n_rows': n_rows
-                }
-                all_file_info.append(file_info)
-                
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_file = file_info
-                    
-        except Exception as e:
-            continue
+#         n_rows = len(table.array)
+#         if n_rows < MIN_DATA_POINTS:
+#             n_skipped_too_small += 1
+#             continue
+        
+#         for param in params:
+#             if param.name == 'longitude_120km':
+#                 lon = float(param.value)
+#             elif param.name == 'latitude_120km':
+#                 lat = float(param.value)
+        
+#         distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+        
+#         file_info = {
+#             'file_path': file_path,
+#             'file_name': os.path.basename(file_path),
+#             'longitude': lon,
+#             'latitude': lat,
+#             'distance': distance,
+#             'n_rows': n_rows
+#         }
+#         all_file_info.append(file_info)
+        
+#         if distance < min_distance:
+#             min_distance = distance
+#             closest_file = file_info
 
-    if n_skipped_too_small:
-        print(f"{folder:>10}: skipped {n_skipped_too_small} file(s) with "
-              f"< {MIN_DATA_POINTS} data points")
+#     if n_skipped_too_small:
+#         print(f"{folder:>10}: skipped {n_skipped_too_small} file(s) with "
+#               f"< {MIN_DATA_POINTS} data points")
     
-    if closest_file:
-        closest_files[folder] = closest_file
-        print(f"{folder:>10}: {closest_file['file_name']}")
-        print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
-        print(f"             Distance: {closest_file['distance']:.4f}°")
-    else:
-        closest_files[folder] = None
-        print(f"{folder:>10}: No valid VOTable files found")
+#     closest_files[folder] = closest_file
+#     print(f"{folder:>10}: {closest_file['file_name']}")
+#     print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
+#     print(f"             Distance: {closest_file['distance']:.4f}°")
+
+
+# w23_SOIRProfiles = ["SOIRProfiles_SO2_1.xml", "SOIRProfiles_AERO.xml"]
+# w23_species = ["SO2_1", "AERO"]
+# w23_long_lat = {}
+# for i in range(2):
+#     profile_path = DATA_DIR / w23_SOIRProfiles[i]
+#     species = w23_species[i]
+#     w23_long_lat[species] = extract_w23_long_lat(profile_path)
+
+#     closest_file = None
+#     min_distance = float('inf')
+#     all_file_info = []
+#     n_skipped_too_small = 0
+
+#     SOIR_table = Table.read(profile_path, format='votable')
+
+#     for j in range(len(SOIR_table)):
+#         orbit = int(SOIR_table[j]["orbit"])
+#         file_name = f"Orbit0{orbit}.1_{species}.xml"
+#         file_path = DATA_DIR / species / file_name
+
+#         table = Table.read(file_path, format='votable')
+#         if len(table) < MIN_DATA_POINTS:
+#             n_skipped_too_small += 1
+#             continue
+
+#         lon = (SOIR_table[j]["lon_max"] + SOIR_table[j]["lon_min"]) / 2
+#         lat = (SOIR_table[j]["lat_max"] + SOIR_table[j]["lat_min"]) / 2
+
+#         distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+
+#         file_info = {
+#             "file_path": file_path,
+#             "file_name": file_name,
+#             "longitude": lon,
+#             "latitude": lat,
+#             "distance": distance,
+#         }
+#         all_file_info.append(file_info)
+
+#         if distance < min_distance:
+#             min_distance = distance
+#             closest_file = file_info
+
+#     if n_skipped_too_small:
+#         print(f"{species:>10}: skipped {n_skipped_too_small} file(s) with "
+#               f"< {MIN_DATA_POINTS} data points")
+    
+#     closest_files[species] = closest_file
+#     print(f"{species:>10}: {closest_file['file_name']}")
+#     print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
+#     print(f"             Distance: {closest_file['distance']:.4f}°")
 
 
 file_mapping = {}
@@ -209,7 +275,7 @@ for folder, file_info in closest_files.items():
         
     except Exception as e:
         print(f"{folder}: Error copying file: {e}")
-
+        
 
 species_files = list(NEW_DATA_DIR.glob("*.xml"))
 raw_profiles = {}
@@ -382,6 +448,7 @@ for i in range(len(wavelengths_nm)):
     R_eff_au.append(R_eff)
     depth_mid = transit_depth(R_eff, v_mid, alpha_sun_mid, theta_mid)
     flux_total_ppm.append((1 - depth_mid) * 1e6)
+    flux_total_ppm = np.asarray(flux_total_ppm, dtype=float)
 
     # -- PH3 only, same ray integral, restricted species list --
     sigma_interp_dict_ph3 = build_sigma_interp_dict(
@@ -406,4 +473,62 @@ ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig("venus_transmission_spectrum.png", dpi=150)
+plt.show()
+
+
+
+# Load the SNR data from the FITS file
+hdul = fits.open('lineplot_sn.fits')
+data = hdul[1].data  # The data is in the second HDU (index 1)
+
+# Create a pandas DataFrame and save as CSV
+df = pd.DataFrame(data)
+df.to_csv('snr_vs_wavelength.csv')
+
+wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
+
+sort_idx = np.argsort(wl)
+wl = wl[sort_idx]
+snr = snr[sort_idx]
+
+plt.plot(wl, snr)
+plt.xlabel(f"Wavelength / um")
+plt.ylabel("SNR")
+plt.title("Instrument SNR vs wavelength (raw ETC output)")
+plt.show()
+
+# ============ Simplified: Add Noise to Your Spectrum ============
+snr_wl_nm = wl * 1000  # Convert microns to nm
+
+snr_interp = interp1d(snr_wl_nm, snr, kind='linear', 
+                       bounds_error=False, fill_value=np.nan)
+snr_at_trans = snr_interp(wavelengths_nm)
+
+in_band_mask = np.isfinite(snr_at_trans) & (snr_at_trans > 0)
+noise_ppm = np.full_like(wavelengths_nm, np.nan)
+noise_ppm[in_band_mask] = BASELINE_PPM / snr_at_trans[in_band_mask]
+ 
+rng = np.random.default_rng(42)  # scoped RNG, doesn't mutate global numpy state
+noisy_flux = flux_total_ppm.copy()
+noisy_flux[in_band_mask] = (
+    flux_total_ppm[in_band_mask] + rng.normal(0, noise_ppm[in_band_mask])
+)
+
+# ============ Plot Results ============
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(wavelengths_nm, flux_total_ppm, linewidth=2, color="blue",
+        label="Noiseless spectrum")
+ax.fill_between(wavelengths_nm[in_band_mask],
+                 (flux_total_ppm - noise_ppm)[in_band_mask],
+                 (flux_total_ppm + noise_ppm)[in_band_mask],
+                 color='blue', alpha=0.15, label='±1σ instrument noise')
+ax.scatter(wavelengths_nm[in_band_mask], noisy_flux[in_band_mask],
+           s=8, color="red", alpha=0.6, label="Noisy realization")
+ax.set_xlabel("Wavelength (nm)", fontsize=12)
+ax.set_ylabel("Flux (ppm)", fontsize=12)
+ax.set_title("Venus Transmission Spectrum with Instrument Noise", fontsize=13)
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig("venus_transmission_with_noise.png", dpi=150)
 plt.show()

@@ -74,7 +74,7 @@ def get_sigma_lambda(
     pressure_atm,
     wl_min_nm=2000,
     wl_max_nm=5000,
-    resolution_cm=1.0,
+    resolution_cm=0.01,
     isotopologue=1,
     cache_dir="hitran_data",
 ):
@@ -109,6 +109,12 @@ def extract_profile(filename):
     table = Table.read(filename, format="votable")
     profile = table[["alt", "p", "t", "n_sh0.5"]]
     profile.rename_column("n_sh0.5", "n")
+    return profile
+
+
+def extract_w23_long_lat(filename):
+    table = Table.read(filename, format="votable")
+    profile = table[["orbit", "lon_min", "lon_max", "lat_min", "lat_max"]]
     return profile
 
 
