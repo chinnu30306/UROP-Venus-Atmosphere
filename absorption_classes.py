@@ -43,11 +43,6 @@ class VenusAtmosphere:
         Below R_base the disk is treated as fully opaque and never reaches
         this method (see effective_radius_m). Above R_top, transmission is
         defined as exactly 1 (tau = 0).
-
-        Uses a fixed-grid trapezoidal integral (fast, vectorised) rather
-        than scipy.quad -- accurate to a few % with n_x ~ 200-500 and much
-        faster once you're looping over hundreds of wavelengths, each with
-        hundreds of impact parameters.
         """
         if b >= self.R_top:
             return 0.0
@@ -72,11 +67,6 @@ class VenusAtmosphere:
     def effective_radius_m(self, sigma_interp_dict, n_b=150, n_x=400):
         """
         R_eff^2 = R_base^2 + 2 * integral_{R_base}^{R_top} b * (1 - T(b)) db
-
-        - Below R_base (75 km): fully opaque, contributes R_base^2 directly.
-        - R_base to R_top (75-110 km): partially transmissive annulus,
-          weighted by how much starlight each impact parameter blocks.
-        - Above R_top (110 km): fully transparent, contributes nothing.
         """
         b_grid = np.linspace(self.R_base, self.R_top, n_b)
         one_minus_T = np.array([
