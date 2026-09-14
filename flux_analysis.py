@@ -476,60 +476,60 @@ plt.savefig("venus_transmission_spectrum.png", dpi=150)
 plt.show()
 
 
+# TO DO: Add instrument noise to the spectrum, based on the SNR vs wavelength data from the ETC output.
+# # Load the SNR data from the FITS file
+# hdul = fits.open('lineplot_sn.fits')
+# data = hdul[1].data  # The data is in the second HDU (index 1)
 
-# Load the SNR data from the FITS file
-hdul = fits.open('lineplot_sn.fits')
-data = hdul[1].data  # The data is in the second HDU (index 1)
+# # Create a pandas DataFrame and save as CSV
+# df = pd.DataFrame(data)
+# df.to_csv('snr_vs_wavelength.csv')
 
-# Create a pandas DataFrame and save as CSV
-df = pd.DataFrame(data)
-df.to_csv('snr_vs_wavelength.csv')
+# wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
 
-wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
+# sort_idx = np.argsort(wl)
+# wl = wl[sort_idx]
+# snr = snr[sort_idx]
 
-sort_idx = np.argsort(wl)
-wl = wl[sort_idx]
-snr = snr[sort_idx]
+# plt.plot(wl, snr)
+# plt.xlabel(f"Wavelength / um")
+# plt.ylabel("SNR")
+# plt.title("Instrument SNR vs wavelength (raw ETC output)")
+# plt.show()
 
-plt.plot(wl, snr)
-plt.xlabel(f"Wavelength / um")
-plt.ylabel("SNR")
-plt.title("Instrument SNR vs wavelength (raw ETC output)")
-plt.show()
+# # ============ Simplified: Add Noise to Your Spectrum ============
+# snr_wl_nm = wl * 1000  # Convert microns to nm
 
-# ============ Simplified: Add Noise to Your Spectrum ============
-snr_wl_nm = wl * 1000  # Convert microns to nm
+# snr_interp = interp1d(snr_wl_nm, snr, kind='linear', 
+#                        bounds_error=False, fill_value=np.nan)
+# snr_at_trans = snr_interp(wavelengths_nm)
 
-snr_interp = interp1d(snr_wl_nm, snr, kind='linear', 
-                       bounds_error=False, fill_value=np.nan)
-snr_at_trans = snr_interp(wavelengths_nm)
-
-in_band_mask = np.isfinite(snr_at_trans) & (snr_at_trans > 0)
-noise_ppm = np.full_like(wavelengths_nm, np.nan)
-noise_ppm[in_band_mask] = BASELINE_PPM / snr_at_trans[in_band_mask]
+# in_band_mask = np.isfinite(snr_at_trans) & (snr_at_trans > 0)
+# noise_ppm = np.full_like(wavelengths_nm, np.nan)
+# noise_ppm[in_band_mask] = BASELINE_PPM / snr_at_trans[in_band_mask]
  
-rng = np.random.default_rng(42)  # scoped RNG, doesn't mutate global numpy state
-flux_total_ppm = np.asarray(flux_total_ppm)
-noisy_flux = flux_total_ppm.copy()
-noisy_flux[in_band_mask] = (
-    flux_total_ppm[in_band_mask] + rng.normal(0, noise_ppm[in_band_mask])
-)
+# rng = np.random.default_rng(42)  # scoped RNG, doesn't mutate global numpy state
+# flux_total_ppm = np.asarray(flux_total_ppm)
+# noisy_flux = flux_total_ppm.copy()
+# noisy_flux[in_band_mask] = (
+#     flux_total_ppm[in_band_mask] + rng.normal(0, noise_ppm[in_band_mask])
+# )
 
-# ============ Plot Results ============
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(wavelengths_nm, flux_total_ppm, linewidth=2, color="blue",
-        label="Noiseless spectrum")
-ax.fill_between(wavelengths_nm[in_band_mask],
-                 (flux_total_ppm - noise_ppm)[in_band_mask],
-                 (flux_total_ppm + noise_ppm)[in_band_mask],
-                 color='blue', alpha=0.15, label='±1σ instrument noise')
-ax.scatter(wavelengths_nm[in_band_mask], noisy_flux[in_band_mask],
-           s=8, color="red", alpha=0.6, label="Noisy realization")
-ax.set_xlabel("Wavelength (nm)", fontsize=12)
-ax.set_ylabel("Flux (ppm)", fontsize=12)
-ax.set_title("Venus Transmission Spectrum with Instrument Noise", fontsize=13)
-ax.legend(fontsize=10)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig("venus_transmission_with_noise.png", dpi=150)
-plt.show()
+# # ============ Plot Results ============
+# fig, ax = plt.subplots(figsize=(12, 6))
+# ax.plot(wavelengths_nm, flux_total_ppm, linewidth=2, color="blue",
+#         label="Noiseless spectrum")
+# ax.fill_between(wavelengths_nm[in_band_mask],
+#                  (flux_total_ppm - noise_ppm)[in_band_mask],
+#                  (flux_total_ppm + noise_ppm)[in_band_mask],
+#                  color='blue', alpha=0.15, label='±1σ instrument noise')
+# ax.scatter(wavelengths_nm[in_band_mask], noisy_flux[in_band_mask],
+#            s=8, color="red", alpha=0.6, label="Noisy realization")
+# ax.set_xlabel("Wavelength (nm)", fontsize=12)
+# ax.set_ylabel("Flux (ppm)", fontsize=12)
+# ax.set_title("Venus Transmission Spectrum with Instrument Noise", fontsize=13)
+# ax.legend(fontsize=10)
+# ax.grid(True, alpha=0.3)
+# plt.tight_layout()
+# plt.savefig("venus_transmission_with_noise.png", dpi=150)
+# plt.show()
