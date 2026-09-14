@@ -53,30 +53,8 @@ MOLECULE_IDS = {
 
 
 def wavelength_grid_nm(wl_min_nm, wl_max_nm, R=2700, oversample=1):
-    """
-    Generate wavelength grid with constant resolving power R.
-    
-    Parameters:
-    -----------
-    wl_min_nm : float
-        Minimum wavelength in nm
-    wl_max_nm : float
-        Maximum wavelength in nm
-    R : float
-        Resolving power (λ/Δλ). Default is 2700 for G395H.
-    oversample : int
-        Oversampling factor (1 = Nyquist sampling, >1 oversamples)
-        Recommended: oversample=3-5 for better line shapes
-    
-    Returns:
-    --------
-    wavelengths_nm : array
-        Wavelengths in nm
-    wavenumber_cm : array
-        Wavenumbers in cm⁻¹
-    """
-    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)  # cm⁻¹
-    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)   # cm⁻¹
+    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
+    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
     wavenumber_cm = [wavenumber_max]
     
     while wavenumber_cm[-1] > wavenumber_min:
@@ -119,14 +97,10 @@ def get_sigma_lambda(
     mol_id = MOLECULE_IDS[molecule]
 
     db_begin(cache_dir)
-
     wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
     wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
-
     table_name = f"{molecule}_{isotopologue}"
-
     fetch(table_name, mol_id, isotopologue, wavenumber_min, wavenumber_max)
-
     wavelengths_nm, wavenumber_cm = wavelength_grid_nm(wl_min_nm, wl_max_nm, R, oversample)
 
     nu, sigma_cm2 = absorptionCoefficient_Voigt(
@@ -184,9 +158,9 @@ def build_species_profiles_for_atmosphere(interpolated_profiles, R_venus_m,
         alt_km = np.asarray(prof["alt"], dtype=float)
         n = np.asarray(prof["n"], dtype=float)
         if n_units_per_cm3:
-            n = n * 1e6  # cm^-3 -> m^-3
+            n = n * 1e6
 
-        r_m = R_venus_m + alt_km * 1e3  # altitude (km) -> radius from centre (m)
+        r_m = R_venus_m + alt_km * 1e3
 
         n_interp = interp1d(
             r_m, n, kind="linear", bounds_error=False,
@@ -222,7 +196,7 @@ def build_sigma_interp_dict(species_list, sigma_dict_alt, test_alts_km,
     sigma_interp_dict = {}
     for species in species_list:
         sigma_cm2 = sigma_dict_alt[species][:, wl_idx]
-        sigma_m2 = sigma_cm2 * 1e-4  # cm^2 -> m^2
+        sigma_m2 = sigma_cm2 * 1e-4
         sigma_interp_dict[species] = interp1d(
             r_test_m, sigma_m2, kind="linear", bounds_error=False,
             fill_value=(sigma_m2[0], sigma_m2[-1]),

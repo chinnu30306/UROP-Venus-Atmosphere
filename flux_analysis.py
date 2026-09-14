@@ -39,16 +39,16 @@ ALT_MIN_KM = 75.0
 ALT_MAX_KM = 110.0
 PH3_VMR = 0.8e-9  # strict upper limit of 0.8 ppb
 
-MIE_WAVELENGTH_REF_NM = 3000.0     # SOIR beta reference wavelength (3.0 um)
-MIE_RADIUS_UM = 0.15               # assumed effective particle radius
-MIE_REFRACTIVE_INDEX = complex(1.40, -0.01)  # H2SO4 droplets @ ~3.0 um
+MIE_WAVELENGTH_REF_NM = 3000.0
+MIE_RADIUS_UM = 0.15
+MIE_REFRACTIVE_INDEX = complex(1.40, -0.01)
 
 WL_MIN_NM = 4000
 WL_MAX_NM = 5000
 R_G395H = 2700
 OVERSAMPLE = 3
 
-DATA_DIR = Path("number_density_data")   # adjust to your actual path
+DATA_DIR = Path("number_density_data")
 NEW_DATA_DIR = Path("number_density_data_new")
 MIN_DATA_POINTS = 2
 BASELINE_PPM = 1e6
@@ -124,7 +124,6 @@ target_lon, target_lat = get_grazing_coordinates(
 )
 
 closest_files = {}
-w23_long_lat = {}
 
 for folder in species_folders:
     if folder == "SO2_1":
@@ -245,11 +244,8 @@ for folder in species_folders:
 file_mapping = {}
 
 for folder, file_info in closest_files.items():
-    
     original_path = file_info['file_path']
-    
     new_filename = f"{folder}.xml"
-    
     new_path = NEW_DATA_DIR / new_filename
     
     shutil.copy2(original_path, new_path)
@@ -372,7 +368,7 @@ species_profiles["AERO"] = build_aerosol_profile_for_atmosphere(
     wavelength_ref_nm=MIE_WAVELENGTH_REF_NM, radius_um=MIE_RADIUS_UM,
     refractive_index=MIE_REFRACTIVE_INDEX, R_venus_m=R_venus_m,
 )
-species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2_0"]  # same n(r), different sigma
+species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2_0"]
 
 atmosphere = VenusAtmosphere(
     R_venus_m=R_venus_m,
@@ -389,7 +385,7 @@ species_isotopologue_map = {}
 for species_name in interpolated_profiles.keys():
     species_isotopologue_map[species_name] = parse_species_isotopologue(species_name)
 
-sigma_dict_alt = {}  # species -> array [n_test_alts, n_wavelengths], cm^2/molecule
+sigma_dict_alt = {}
 for species_name in species_list:
     if species_name == "PH3":
         base_molecule, iso_id = "PH3", 1
@@ -427,8 +423,8 @@ for species_name in species_list:
 PH3_ONLY_LIST = ["PH3"]
 
 R_eff_au = []
-flux_total_ppm = []          # all species combined
-flux_ph3_only_ppm = []             # PH3 alone, for visual comparison
+flux_total_ppm = []
+flux_ph3_only_ppm = []
 
 for i in range(len(wavelengths_nm)):
     wl_nm = wavelengths_nm[i]
@@ -448,7 +444,6 @@ for i in range(len(wavelengths_nm)):
     depth_mid = transit_depth(R_eff, v_mid, alpha_sun_mid, theta_mid)
     flux_total_ppm.append((1 - depth_mid) * 1e6)
 
-    # -- PH3 only, same ray integral, restricted species list --
     sigma_interp_dict_ph3 = build_sigma_interp_dict(
         PH3_ONLY_LIST, sigma_dict_alt, test_alts_km, wl_idx=i, R_venus_m=R_venus_m
     )
@@ -476,60 +471,20 @@ plt.savefig("venus_transmission_spectrum.png", dpi=150)
 plt.show()
 
 
-# TO DO: Add instrument noise to the spectrum, based on the SNR vs wavelength data from the ETC output.
-# # Load the SNR data from the FITS file
-# hdul = fits.open('lineplot_sn.fits')
-# data = hdul[1].data  # The data is in the second HDU (index 1)
+hdul = fits.open('lineplot_sn.fits')
+data = hdul[1].data
 
-# # Create a pandas DataFrame and save as CSV
-# df = pd.DataFrame(data)
-# df.to_csv('snr_vs_wavelength.csv')
+df = pd.DataFrame(data)
+df.to_csv('snr_vs_wavelength.csv')
 
-# wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
+wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
 
-# sort_idx = np.argsort(wl)
-# wl = wl[sort_idx]
-# snr = snr[sort_idx]
+sort_idx = np.argsort(wl)
+wl = wl[sort_idx]
+snr = snr[sort_idx]
 
-# plt.plot(wl, snr)
-# plt.xlabel(f"Wavelength / um")
-# plt.ylabel("SNR")
-# plt.title("Instrument SNR vs wavelength (raw ETC output)")
-# plt.show()
-
-# # ============ Simplified: Add Noise to Your Spectrum ============
-# snr_wl_nm = wl * 1000  # Convert microns to nm
-
-# snr_interp = interp1d(snr_wl_nm, snr, kind='linear', 
-#                        bounds_error=False, fill_value=np.nan)
-# snr_at_trans = snr_interp(wavelengths_nm)
-
-# in_band_mask = np.isfinite(snr_at_trans) & (snr_at_trans > 0)
-# noise_ppm = np.full_like(wavelengths_nm, np.nan)
-# noise_ppm[in_band_mask] = BASELINE_PPM / snr_at_trans[in_band_mask]
- 
-# rng = np.random.default_rng(42)  # scoped RNG, doesn't mutate global numpy state
-# flux_total_ppm = np.asarray(flux_total_ppm)
-# noisy_flux = flux_total_ppm.copy()
-# noisy_flux[in_band_mask] = (
-#     flux_total_ppm[in_band_mask] + rng.normal(0, noise_ppm[in_band_mask])
-# )
-
-# # ============ Plot Results ============
-# fig, ax = plt.subplots(figsize=(12, 6))
-# ax.plot(wavelengths_nm, flux_total_ppm, linewidth=2, color="blue",
-#         label="Noiseless spectrum")
-# ax.fill_between(wavelengths_nm[in_band_mask],
-#                  (flux_total_ppm - noise_ppm)[in_band_mask],
-#                  (flux_total_ppm + noise_ppm)[in_band_mask],
-#                  color='blue', alpha=0.15, label='±1σ instrument noise')
-# ax.scatter(wavelengths_nm[in_band_mask], noisy_flux[in_band_mask],
-#            s=8, color="red", alpha=0.6, label="Noisy realization")
-# ax.set_xlabel("Wavelength (nm)", fontsize=12)
-# ax.set_ylabel("Flux (ppm)", fontsize=12)
-# ax.set_title("Venus Transmission Spectrum with Instrument Noise", fontsize=13)
-# ax.legend(fontsize=10)
-# ax.grid(True, alpha=0.3)
-# plt.tight_layout()
-# plt.savefig("venus_transmission_with_noise.png", dpi=150)
-# plt.show()
+plt.plot(wl, snr)
+plt.xlabel(f"Wavelength / um")
+plt.ylabel("SNR")
+plt.title("Instrument SNR vs wavelength (raw ETC output)")
+plt.show()
