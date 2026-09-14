@@ -39,16 +39,26 @@ ALT_MIN_KM = 75.0
 ALT_MAX_KM = 110.0
 PH3_VMR = 0.8e-9  # strict upper limit of 0.8 ppb
 
+<<<<<<< HEAD
+MIE_WAVELENGTH_REF_NM = 3000.0
+MIE_RADIUS_UM = 0.15
+MIE_REFRACTIVE_INDEX = complex(1.40, -0.01)
+=======
 MIE_WAVELENGTH_REF_NM = 3000.0     # SOIR beta reference wavelength (3.0 um)
 MIE_RADIUS_UM = 0.15               # assumed effective particle radius
 MIE_REFRACTIVE_INDEX = complex(1.40, -0.01)  # H2SO4 droplets @ ~3.0 um
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 
 WL_MIN_NM = 4000
 WL_MAX_NM = 5000
 R_G395H = 2700
 OVERSAMPLE = 3
 
+<<<<<<< HEAD
+DATA_DIR = Path("number_density_data")
+=======
 DATA_DIR = Path("number_density_data")   # adjust to your actual path
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 NEW_DATA_DIR = Path("number_density_data_new")
 MIN_DATA_POINTS = 2
 BASELINE_PPM = 1e6
@@ -124,7 +134,10 @@ target_lon, target_lat = get_grazing_coordinates(
 )
 
 closest_files = {}
+<<<<<<< HEAD
+=======
 w23_long_lat = {}
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 
 for folder in species_folders:
     if folder == "SO2_1":
@@ -245,11 +258,16 @@ for folder in species_folders:
 file_mapping = {}
 
 for folder, file_info in closest_files.items():
+<<<<<<< HEAD
+    original_path = file_info['file_path']
+    new_filename = f"{folder}.xml"
+=======
     
     original_path = file_info['file_path']
     
     new_filename = f"{folder}.xml"
     
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     new_path = NEW_DATA_DIR / new_filename
     
     shutil.copy2(original_path, new_path)
@@ -372,7 +390,11 @@ species_profiles["AERO"] = build_aerosol_profile_for_atmosphere(
     wavelength_ref_nm=MIE_WAVELENGTH_REF_NM, radius_um=MIE_RADIUS_UM,
     refractive_index=MIE_REFRACTIVE_INDEX, R_venus_m=R_venus_m,
 )
+<<<<<<< HEAD
+species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2_0"]
+=======
 species_profiles["RAYLEIGH_CO2"] = species_profiles["CO2_0"]  # same n(r), different sigma
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 
 atmosphere = VenusAtmosphere(
     R_venus_m=R_venus_m,
@@ -389,7 +411,11 @@ species_isotopologue_map = {}
 for species_name in interpolated_profiles.keys():
     species_isotopologue_map[species_name] = parse_species_isotopologue(species_name)
 
+<<<<<<< HEAD
+sigma_dict_alt = {}
+=======
 sigma_dict_alt = {}  # species -> array [n_test_alts, n_wavelengths], cm^2/molecule
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 for species_name in species_list:
     if species_name == "PH3":
         base_molecule, iso_id = "PH3", 1
@@ -427,8 +453,13 @@ for species_name in species_list:
 PH3_ONLY_LIST = ["PH3"]
 
 R_eff_au = []
+<<<<<<< HEAD
+flux_total_ppm = []
+flux_ph3_only_ppm = []
+=======
 flux_total_ppm = []          # all species combined
 flux_ph3_only_ppm = []             # PH3 alone, for visual comparison
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 
 for i in range(len(wavelengths_nm)):
     wl_nm = wavelengths_nm[i]
@@ -448,7 +479,10 @@ for i in range(len(wavelengths_nm)):
     depth_mid = transit_depth(R_eff, v_mid, alpha_sun_mid, theta_mid)
     flux_total_ppm.append((1 - depth_mid) * 1e6)
 
+<<<<<<< HEAD
+=======
     # -- PH3 only, same ray integral, restricted species list --
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     sigma_interp_dict_ph3 = build_sigma_interp_dict(
         PH3_ONLY_LIST, sigma_dict_alt, test_alts_km, wl_idx=i, R_venus_m=R_venus_m
     )
@@ -476,6 +510,25 @@ plt.savefig("venus_transmission_spectrum.png", dpi=150)
 plt.show()
 
 
+<<<<<<< HEAD
+hdul = fits.open('lineplot_sn.fits')
+data = hdul[1].data
+
+df = pd.DataFrame(data)
+df.to_csv('snr_vs_wavelength.csv')
+
+wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
+
+sort_idx = np.argsort(wl)
+wl = wl[sort_idx]
+snr = snr[sort_idx]
+
+plt.plot(wl, snr)
+plt.xlabel(f"Wavelength / um")
+plt.ylabel("SNR")
+plt.title("Instrument SNR vs wavelength (raw ETC output)")
+plt.show()
+=======
 # TO DO: Add instrument noise to the spectrum, based on the SNR vs wavelength data from the ETC output.
 # # Load the SNR data from the FITS file
 # hdul = fits.open('lineplot_sn.fits')
@@ -533,3 +586,4 @@ plt.show()
 # plt.tight_layout()
 # plt.savefig("venus_transmission_with_noise.png", dpi=150)
 # plt.show()
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b

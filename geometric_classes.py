@@ -32,11 +32,6 @@ class Grid():
 
 
 class Planet():
-    """
-    A spherical body. `pos` is ALWAYS heliocentric (Sun at the origin),
-    matching Veras (2019) Section 2.1: "The centre of the primary...
-    resides at the origin."
-    """
     def __init__(self, pos=[0, 0, 0], radius=0, rows=180, cols=360):
         self.__pos = np.array(pos, dtype=float)
         self.__r = radius
@@ -56,10 +51,6 @@ class Planet():
         Centre-line point of the shadow: intersect the Sun->Venus ray
         (the cone's own axis) with the near side of Mars's sphere, and
         return the (lat, lon) of that point on Mars.
-
-        This is what you actually want for "the path of Venus's shadow":
-        the track of the point where the Sun-Venus-Mars alignment is
-        closest to perfect, i.e. Veras's psi -> 0 (eq. 56).
         """
         venus_pos = np.array(venus_pos, dtype=float)
         r13 = self.pos()          # Sun -> Mars
@@ -84,7 +75,7 @@ class Planet():
     def isInCone(self, cone, value, time):
         """
         Mark every grid point on Mars's sunlit hemisphere that lies
-        inside the umbral/antumbral cone (Veras 2019, Section 3.2/4).
+        inside the umbral/antumbral cone.
         """
         coeffs = cone.quadric_coeffs()
         sun_dir_from_mars = -self.pos()          # Mars -> Sun
@@ -105,7 +96,7 @@ class Planet():
                     continue
 
                 Q = quadric(coeffs, point)
-                if Q <= 0:          # interior of the cone (see derivation)
+                if Q <= 0:
                     self.grid.set_value(i, j, value)
 
 
@@ -113,7 +104,6 @@ class Cone():
     """
     The umbral/antumbral radiation cone formed by the primary (Sun,
     R1) and the occulter (Venus, R2), separated by r12 (Sun->Venus).
-    All formulas are Veras (2019) eqs (10)-(26).
     """
     def __init__(self, R1, R2, r12):
         self.R1 = R1

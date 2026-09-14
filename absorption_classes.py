@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 """
 classes_new.py
 
@@ -19,6 +21,7 @@ parameters b (~6.1e6 m, a radius from the centre).
   R_top  = R_venus + alt_max_km   (110 km -> fully transparent above this)
 """
 
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 import numpy as np
 
 _trapz = getattr(np, "trapezoid", None) or np.trapz
