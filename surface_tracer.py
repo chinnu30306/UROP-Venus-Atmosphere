@@ -74,7 +74,7 @@ ax.set_ylim(-90, 90)
 for r in range(mars_body.grid.get_rows()):
     for c in range(mars_body.grid.get_cols()):
         if mars_body.grid.get_value(r, c) == 2:
-            ax.add_patch(Rectangle((c - 180, r - 90), 1, 1, fc='b'))
+            ax.add_patch(Rectangle((c - 180, r - 90), 1, 1, fc='0.8'))
 ax.set_xlabel("Longitude (deg)")
 ax.set_ylabel("Latitude (deg)")
 ax.set_title("Swept path of Venus's antumbral shadow across Mars (19 Aug 2030)")

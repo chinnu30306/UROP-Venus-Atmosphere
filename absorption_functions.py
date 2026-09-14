@@ -52,11 +52,46 @@ MOLECULE_IDS = {
 }
 
 
-def wavelength_grid_nm(wl_min_nm, wl_max_nm, resolution_cm):
-    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)
-    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)
-    wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
+def wavelength_grid_nm(wl_min_nm, wl_max_nm, R=2700, oversample=1):
+    """
+    Generate wavelength grid with constant resolving power R.
+    
+    Parameters:
+    -----------
+    wl_min_nm : float
+        Minimum wavelength in nm
+    wl_max_nm : float
+        Maximum wavelength in nm
+    R : float
+        Resolving power (λ/Δλ). Default is 2700 for G395H.
+    oversample : int
+        Oversampling factor (1 = Nyquist sampling, >1 oversamples)
+        Recommended: oversample=3-5 for better line shapes
+    
+    Returns:
+    --------
+    wavelengths_nm : array
+        Wavelengths in nm
+    wavenumber_cm : array
+        Wavenumbers in cm⁻¹
+    """
+    wavenumber_min = 1.0 / (wl_max_nm * 1e-7)  # cm⁻¹
+    wavenumber_max = 1.0 / (wl_min_nm * 1e-7)   # cm⁻¹
+    wavenumber_cm = [wavenumber_max]
+    
+    while wavenumber_cm[-1] > wavenumber_min:
+        current_nu = wavenumber_cm[-1]
+        delta_nu = current_nu / (R * oversample)
+        next_nu = current_nu - delta_nu
+
+        if next_nu < wavenumber_min:
+            break
+            
+        wavenumber_cm.append(next_nu)
+    
+    wavenumber_cm = np.array(wavenumber_cm)
     wavelengths_nm = 1e7 / wavenumber_cm
+    
     return wavelengths_nm, wavenumber_cm
 
 
@@ -74,7 +109,8 @@ def get_sigma_lambda(
     pressure_atm,
     wl_min_nm=2000,
     wl_max_nm=5000,
-    resolution_cm=0.01,
+    R=2700,
+    oversample=3,
     isotopologue=1,
     cache_dir="hitran_data",
 ):
@@ -91,7 +127,7 @@ def get_sigma_lambda(
 
     fetch(table_name, mol_id, isotopologue, wavenumber_min, wavenumber_max)
 
-    wavenumber_cm = np.arange(wavenumber_min, wavenumber_max, resolution_cm)
+    wavelengths_nm, wavenumber_cm = wavelength_grid_nm(wl_min_nm, wl_max_nm, R, oversample)
 
     nu, sigma_cm2 = absorptionCoefficient_Voigt(
         SourceTables=table_name,
@@ -109,12 +145,6 @@ def extract_profile(filename):
     table = Table.read(filename, format="votable")
     profile = table[["alt", "p", "t", "n_sh0.5"]]
     profile.rename_column("n_sh0.5", "n")
-    return profile
-
-
-def extract_w23_long_lat(filename):
-    table = Table.read(filename, format="votable")
-    profile = table[["orbit", "lon_min", "lon_max", "lat_min", "lat_max"]]
     return profile
 
 

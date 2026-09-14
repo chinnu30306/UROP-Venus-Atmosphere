@@ -13,17 +13,18 @@ from scipy.interpolate import interp1d
 from astropy.io import fits
 import pandas as pd
 from astropy.table import Table
+from matplotlib.ticker import ScalarFormatter
 
 from absorption_functions import (
     get_sigma_lambda,
     extract_profile,
-    extract_w23_long_lat,
     wavelength_grid_nm,
     parse_species_isotopologue,
     build_species_profiles_for_atmosphere,
     ph3_profile_from_vmr,
     build_sigma_interp_dict,
     extract_aerosol_profile,
+    aerosol_number_density_from_beta,
     build_aerosol_profile_for_atmosphere,
     sigma_mie,
     sigma_rayleigh,
@@ -34,31 +35,9 @@ from geometric_functions import angle_between_vectors, transit_depth, get_grazin
 from absorption_classes import VenusAtmosphere
 
 
-filename = "number_density_data/SOIRProfiles_AERO.xml"
-table = Table.read(filename, format="votable")
-print(table.colnames)
-
-# hdul = fits.open('lineplot_sn.fits')
-# data = hdul[1].data  # The data is in the second HDU (index 1)
-# df = pd.DataFrame(data)
-# df.to_csv('snr_vs_wavelength.csv')
-
-# wl, snr = np.loadtxt('snr_vs_wavelength.csv', skiprows=1, usecols=(1, 2), dtype='float', delimiter=',', unpack=True)
-
-# sort_idx = np.argsort(wl)
-# wl = wl[sort_idx]
-# snr = snr[sort_idx]
-
-# plt.plot(wl, snr)
-# plt.xlabel(f"Wavelength / um")
-# plt.ylabel("SNR")
-# plt.title("Instrument SNR vs wavelength (raw ETC output)")
-# plt.show()
-
-
 ALT_MIN_KM = 75.0
 ALT_MAX_KM = 110.0
-PH3_VMR = 20e-6  # strict upper limit of 0.8 ppb
+PH3_VMR = 0.8e-9  # strict upper limit of 0.8 ppb
 
 MIE_WAVELENGTH_REF_NM = 3000.0     # SOIR beta reference wavelength (3.0 um)
 MIE_RADIUS_UM = 0.15               # assumed effective particle radius
@@ -66,7 +45,8 @@ MIE_REFRACTIVE_INDEX = complex(1.40, -0.01)  # H2SO4 droplets @ ~3.0 um
 
 WL_MIN_NM = 4000
 WL_MAX_NM = 5000
-RESOLUTION_CM = 1.0  # use 0.01 for better quality
+R_G395H = 2700
+OVERSAMPLE = 3
 
 DATA_DIR = Path("number_density_data")   # adjust to your actual path
 NEW_DATA_DIR = Path("number_density_data_new")
@@ -125,14 +105,16 @@ for i in range(len(theta)):
 
 plt.figure(figsize=(9, 5))
 plt.plot(datetime_jd, np.array(flux_opaque_ppm))
+plt.gca().yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+plt.ticklabel_format(style='plain', axis='y', useOffset=False)
 plt.xlabel("Julian Date")
 plt.ylabel("Flux (ppm)")
 plt.title("Solid-body transit depth")
 plt.grid()
 plt.show()
 
-
-species_folders = ["CO_0", "CO2_0", "H2O_1", "H2O_4", "HCL_1", "HCL_2", "HF_1"]
+'''
+species_folders = ["CO_0", "CO2_0", "H2O_1", "H2O_4", "HCL_1", "HCL_2", "HF_1", "SO2_1", "AERO"]
 
 target_lon, target_lat = get_grazing_coordinates(
     datetime_jd_mid,
@@ -142,118 +124,127 @@ target_lon, target_lat = get_grazing_coordinates(
 )
 
 closest_files = {}
+w23_long_lat = {}
 
-# for folder in species_folders:
-#     folder_path = DATA_DIR / folder
-#     file_pattern = os.path.join(folder_path, "*.xml")
-#     files = glob.glob(file_pattern)
-    
-#     closest_file = None
-#     min_distance = float('inf')
-#     all_file_info = []
-#     n_skipped_too_small = 0
-    
-#     for file_path in files:
-#         votable = parse(file_path)
-#         table = votable.get_first_table()
-#         params = table.params
+for folder in species_folders:
+    if folder == "SO2_1":
+        profile_path = DATA_DIR / "SOIRProfiles_SO2_1.xml"
+        species = folder
+        SOIR_table = Table.read(profile_path, format='votable')
 
-#         n_rows = len(table.array)
-#         if n_rows < MIN_DATA_POINTS:
-#             n_skipped_too_small += 1
-#             continue
+        closest_file = None
+        min_distance = float('inf')
+        all_file_info = []
+        n_skipped_too_small = 0
+
+        for j in range(len(SOIR_table)):
+            orbit = int(SOIR_table[j]["orbit"])
+            file_name = f"Orbit0{orbit}.1_{species}.xml"
+            file_path = DATA_DIR / species / file_name
+
+            table = Table.read(file_path, format='votable')
+            if len(table) < MIN_DATA_POINTS:
+                n_skipped_too_small += 1
+                continue
+
+            lon = (SOIR_table[j]["lon_max"] + SOIR_table[j]["lon_min"]) / 2
+            lat = (SOIR_table[j]["lat_max"] + SOIR_table[j]["lat_min"]) / 2
+
+            distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+            
+            file_info = {
+                'file_path': file_path,
+                'file_name': file_name,
+                'longitude': lon,
+                'latitude': lat,
+                'distance': distance,
+                'n_rows': n_rows
+            }
+            all_file_info.append(file_info)
+            
+            if distance < min_distance:
+                min_distance = distance
+                closest_file = file_info
+
+    elif folder == "AERO":
+        profile_path = DATA_DIR / "SOIRProfiles_AERO.xml"
+        species = folder
+        SOIR_table = Table.read(profile_path, format="votable")
+
+        closest_orbit = None
+        min_distance = float("inf")
+
+        for j in range(len(SOIR_table)):
+            orbit = int(SOIR_table[j]["orbit"])
+
+            lon = (SOIR_table[j]["lon_max"] + SOIR_table[j]["lon_min"]) / 2
+            lat = (SOIR_table[j]["lat_max"] + SOIR_table[j]["lat_min"]) / 2
+
+            distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+
+            if distance < min_distance:
+                min_distance = distance
+                closest_orbit = orbit
+
+        print(f"{species:>10}: closest orbit = {closest_orbit}")
+        continue
+
+    else:
+        folder_path = DATA_DIR / folder
+        file_pattern = os.path.join(folder_path, "*.xml")
+        files = glob.glob(file_pattern)
         
-#         for param in params:
-#             if param.name == 'longitude_120km':
-#                 lon = float(param.value)
-#             elif param.name == 'latitude_120km':
-#                 lat = float(param.value)
+        closest_file = None
+        min_distance = float('inf')
+        all_file_info = []
+        n_skipped_too_small = 0
         
-#         distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
-        
-#         file_info = {
-#             'file_path': file_path,
-#             'file_name': os.path.basename(file_path),
-#             'longitude': lon,
-#             'latitude': lat,
-#             'distance': distance,
-#             'n_rows': n_rows
-#         }
-#         all_file_info.append(file_info)
-        
-#         if distance < min_distance:
-#             min_distance = distance
-#             closest_file = file_info
+        for file_path in files:
+            file_name = os.path.basename(file_path)
+            votable = parse(file_path)
+            table = votable.get_first_table()
+            params = table.params
 
-#     if n_skipped_too_small:
-#         print(f"{folder:>10}: skipped {n_skipped_too_small} file(s) with "
-#               f"< {MIN_DATA_POINTS} data points")
+            n_rows = len(table.array)
+            if n_rows < MIN_DATA_POINTS:
+                n_skipped_too_small += 1
+                continue
+            
+            for param in params:
+                if param.name == 'longitude_120km':
+                    lon = float(param.value)
+                elif param.name == 'latitude_120km':
+                    lat = float(param.value)
+        
+            distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
+            
+            file_info = {
+                'file_path': file_path,
+                'file_name': file_name,
+                'longitude': lon,
+                'latitude': lat,
+                'distance': distance,
+                'n_rows': n_rows
+            }
+            all_file_info.append(file_info)
+            
+            if distance < min_distance:
+                min_distance = distance
+                closest_file = file_info
+
+    if n_skipped_too_small:
+        print(f"{folder:>10}: skipped {n_skipped_too_small} file(s) with "
+              f"< {MIN_DATA_POINTS} data points")
     
-#     closest_files[folder] = closest_file
-#     print(f"{folder:>10}: {closest_file['file_name']}")
-#     print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
-#     print(f"             Distance: {closest_file['distance']:.4f}°")
-
-
-# w23_SOIRProfiles = ["SOIRProfiles_SO2_1.xml", "SOIRProfiles_AERO.xml"]
-# w23_species = ["SO2_1", "AERO"]
-# w23_long_lat = {}
-# for i in range(2):
-#     profile_path = DATA_DIR / w23_SOIRProfiles[i]
-#     species = w23_species[i]
-#     w23_long_lat[species] = extract_w23_long_lat(profile_path)
-
-#     closest_file = None
-#     min_distance = float('inf')
-#     all_file_info = []
-#     n_skipped_too_small = 0
-
-#     SOIR_table = Table.read(profile_path, format='votable')
-
-#     for j in range(len(SOIR_table)):
-#         orbit = int(SOIR_table[j]["orbit"])
-#         file_name = f"Orbit0{orbit}.1_{species}.xml"
-#         file_path = DATA_DIR / species / file_name
-
-#         table = Table.read(file_path, format='votable')
-#         if len(table) < MIN_DATA_POINTS:
-#             n_skipped_too_small += 1
-#             continue
-
-#         lon = (SOIR_table[j]["lon_max"] + SOIR_table[j]["lon_min"]) / 2
-#         lat = (SOIR_table[j]["lat_max"] + SOIR_table[j]["lat_min"]) / 2
-
-#         distance = np.sqrt((lon - target_lon)**2 + (lat - target_lat)**2)
-
-#         file_info = {
-#             "file_path": file_path,
-#             "file_name": file_name,
-#             "longitude": lon,
-#             "latitude": lat,
-#             "distance": distance,
-#         }
-#         all_file_info.append(file_info)
-
-#         if distance < min_distance:
-#             min_distance = distance
-#             closest_file = file_info
-
-#     if n_skipped_too_small:
-#         print(f"{species:>10}: skipped {n_skipped_too_small} file(s) with "
-#               f"< {MIN_DATA_POINTS} data points")
-    
-#     closest_files[species] = closest_file
-#     print(f"{species:>10}: {closest_file['file_name']}")
-#     print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
-#     print(f"             Distance: {closest_file['distance']:.4f}°")
+    closest_files[folder] = closest_file
+    print(f"{folder:>10}: {closest_file['file_name']}")
+    print(f"             LON={closest_file['longitude']:.4f}°, LAT={closest_file['latitude']:.4f}°")
+    print(f"             Distance: {closest_file['distance']:.4f}°")
 
 
 file_mapping = {}
 
 for folder, file_info in closest_files.items():
-    if file_info is None:
-        print(f"{folder:>10}: No file found - skipping")
-        continue
     
     original_path = file_info['file_path']
     
@@ -261,21 +252,16 @@ for folder, file_info in closest_files.items():
     
     new_path = NEW_DATA_DIR / new_filename
     
-    # Copy the file
-    try:
-        shutil.copy2(original_path, new_path)
-        file_mapping[folder] = {
-            'original': original_path,
-            'new': new_path,
-            'new_filename': new_filename,
-            'longitude': file_info['longitude'],
-            'latitude': file_info['latitude']
-        }
-        print(f"{folder:>10} → {new_filename}")
-        
-    except Exception as e:
-        print(f"{folder}: Error copying file: {e}")
-        
+    shutil.copy2(original_path, new_path)
+    file_mapping[folder] = {
+        'original': original_path,
+        'new': new_path,
+        'new_filename': new_filename,
+        'longitude': file_info['longitude'],
+        'latitude': file_info['latitude']
+    }
+    print(f"{folder:>10} → {new_filename}")
+'''
 
 species_files = list(NEW_DATA_DIR.glob("*.xml"))
 raw_profiles = {}
@@ -308,10 +294,27 @@ for species_name, profile in raw_profiles.items():
         "alt": alt_grid, "p": p_grid / 1013.25, "t": t_grid, "n": n_grid
     }
 
+aero_table = extract_aerosol_profile(DATA_DIR / "AERO.xml")
+aero_alt = np.asarray(aero_table["alt"], dtype=float)
+aero_beta = np.asarray(aero_table["beta"], dtype=float)
+ 
+sort_idx = np.argsort(aero_alt)
+aero_alt = aero_alt[sort_idx]
+aero_beta = aero_beta[sort_idx]
+
+beta_grid = interp1d(aero_alt, aero_beta, kind="linear",
+                      bounds_error=False, fill_value="extrapolate")(alt_grid)
+beta_grid = np.clip(beta_grid, a_min=0.0, a_max=None)  # extinction can't be negative
+
+aero_number_density = aerosol_number_density_from_beta(
+    beta_per_km=beta_grid, wavelength_ref_nm=MIE_WAVELENGTH_REF_NM,
+    radius_um=MIE_RADIUS_UM, refractive_index=MIE_REFRACTIVE_INDEX
+)
+
 fig, axes = plt.subplots(3, 1, figsize=(9, 9))
 
 axes[0].plot(alt_grid, pres_VIRA, label='VIRA')
-axes[0].plot(interpolated_profiles['CO_0']['alt'], interpolated_profiles['CO_0']['p'], label='SPICAV-SOIR')
+axes[0].plot(interpolated_profiles['CO2_0']['alt'], interpolated_profiles['CO2_0']['p'], label='SPICAV-SOIR')
 axes[0].set_xlabel("Altitude / km")
 axes[0].set_ylabel("Pressure / atm")
 axes[0].set_title("Pressure against altitude for 75-110km")
@@ -320,7 +323,7 @@ axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
 axes[1].plot(alt_grid, temp_VIRA, label='VIRA')
-axes[1].plot(interpolated_profiles['CO_0']['alt'], interpolated_profiles['CO_0']['t'], label='SPICAV-SOIR')
+axes[1].plot(interpolated_profiles['CO2_0']['alt'], interpolated_profiles['CO2_0']['t'], label='SPICAV-SOIR')
 axes[1].set_xlabel("Altitude / km")
 axes[1].set_ylabel("Temperature / K")
 axes[1].set_title("Temperature against altitude for 75-110km")
@@ -329,6 +332,7 @@ axes[1].grid(True, alpha=0.3)
 
 for species, prof in interpolated_profiles.items():
     axes[2].plot(prof["alt"], prof["n"], label=species)
+axes[2].plot(alt_grid, aero_number_density, label="AERO")
 
 axes[2].set_title("Number density against altitude for 75-110km from SPICAV-SOIR")
 axes[2].set_xlabel("Altitude / km")
@@ -340,6 +344,17 @@ axes[2].grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
+for species, prof in interpolated_profiles.items():
+    plt.plot(prof["alt"], prof["n"], label=species)
+plt.plot(alt_grid, aero_number_density, label="AERO")
+
+plt.title("Number density against altitude for 75-110km from SPICAV-SOIR")
+plt.xlabel("Altitude / km")
+plt.ylabel(r"Number density / cm$^{-3}$")
+plt.yscale("log")
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.show()
 
 species_profiles = build_species_profiles_for_atmosphere(
     interpolated_profiles, R_venus_m, n_units_per_cm3=True
@@ -352,19 +367,6 @@ species_profiles["PH3"] = ph3_profile_from_vmr(
  
 species_list = list(interpolated_profiles.keys()) + ["PH3"]
 
-aero_table = extract_aerosol_profile(DATA_DIR / "AERO.xml")
-aero_alt = np.asarray(aero_table["alt"], dtype=float)
-aero_beta = np.asarray(aero_table["beta"], dtype=float)
- 
-sort_idx = np.argsort(aero_alt)
-aero_alt = aero_alt[sort_idx]
-aero_beta = aero_beta[sort_idx]
- 
-
-beta_grid = interp1d(aero_alt, aero_beta, kind="linear",
-                      bounds_error=False, fill_value="extrapolate")(alt_grid)
-beta_grid = np.clip(beta_grid, a_min=0.0, a_max=None)  # extinction can't be negative
- 
 species_profiles["AERO"] = build_aerosol_profile_for_atmosphere(
     alt_km=alt_grid, beta_per_km=beta_grid,
     wavelength_ref_nm=MIE_WAVELENGTH_REF_NM, radius_um=MIE_RADIUS_UM,
@@ -380,8 +382,8 @@ atmosphere = VenusAtmosphere(
 )
 
 
-wavelengths_nm, wavenumber_cm = wavelength_grid_nm(WL_MIN_NM, WL_MAX_NM, RESOLUTION_CM)
-test_alts_km = [75., 80., 85., 90., 95., 100., 105., 110.]
+wavelengths_nm, wavenumber_cm = wavelength_grid_nm(WL_MIN_NM, WL_MAX_NM, R_G395H, OVERSAMPLE)
+test_alts_km = np.arange(ALT_MIN_KM, ALT_MAX_KM + 1, 1)
 
 species_isotopologue_map = {}
 for species_name in interpolated_profiles.keys():
@@ -404,17 +406,14 @@ for species_name in species_list:
         T_alt = t_arr[idx]
         P_alt = p_arr[idx]
 
-        if np.isnan(T_alt) or T_alt <= 0:
-            print(f"  Warning: Invalid T={T_alt} at {alt} km, using 250 K")
-            T_alt = 250.0
-
         wl, sigma = get_sigma_lambda(
             molecule=base_molecule,
             temperature_K=T_alt,
             pressure_atm=P_alt,
             wl_min_nm=WL_MIN_NM,
             wl_max_nm=WL_MAX_NM,
-            resolution_cm=RESOLUTION_CM,
+            R=R_G395H,
+            oversample=OVERSAMPLE,
             isotopologue=iso_id,
         )
  
@@ -448,7 +447,6 @@ for i in range(len(wavelengths_nm)):
     R_eff_au.append(R_eff)
     depth_mid = transit_depth(R_eff, v_mid, alpha_sun_mid, theta_mid)
     flux_total_ppm.append((1 - depth_mid) * 1e6)
-    flux_total_ppm = np.asarray(flux_total_ppm, dtype=float)
 
     # -- PH3 only, same ray integral, restricted species list --
     sigma_interp_dict_ph3 = build_sigma_interp_dict(
@@ -464,6 +462,8 @@ ax.plot(wavelengths_nm, flux_total_ppm, linewidth=1.5, color="blue",
          label="Total (absorption + Rayleigh + Mie)")
 ax.plot(wavelengths_nm, flux_ph3_only_ppm, linewidth=1.5, color="crimson",
          label="PH3 absorption only (0.8 ppb VMR)")
+ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+ax.ticklabel_format(style='plain', axis='y', useOffset=False)
 ax.set_xlabel("Wavelength (nm)", fontsize=12)
 ax.set_ylabel("Flux (ppm)", fontsize=12)
 ax.set_title("Venus Transmission Spectrum at Mid-Transit, 75-110 km shell\n"
@@ -509,6 +509,7 @@ noise_ppm = np.full_like(wavelengths_nm, np.nan)
 noise_ppm[in_band_mask] = BASELINE_PPM / snr_at_trans[in_band_mask]
  
 rng = np.random.default_rng(42)  # scoped RNG, doesn't mutate global numpy state
+flux_total_ppm = np.asarray(flux_total_ppm)
 noisy_flux = flux_total_ppm.copy()
 noisy_flux[in_band_mask] = (
     flux_total_ppm[in_band_mask] + rng.normal(0, noise_ppm[in_band_mask])
