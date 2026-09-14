@@ -8,7 +8,10 @@ __pycache__/
 
 # Macbook cache
 .DS_Store
+<<<<<<< HEAD
 */.DS_Store
+=======
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 
 # Distribution / packaging
 .Python

@@ -34,6 +34,12 @@ def quadric(coeff, point):
 
 def transit_visible_from_mars(R1, R2, R3, r12, r13):
     """
+<<<<<<< HEAD
+=======
+    Veras (2019) eqs. (37), (53)-(58): is any part of the target
+    (Mars, radius R3) inside the primary-occulter shadow cone?
+
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     R1, R2, R3 : radii of Sun, Venus, Mars (consistent units, e.g. AU)
     r12        : Sun -> Venus vector (heliocentric)
     r13        : Sun -> Mars vector (heliocentric)
@@ -43,8 +49,15 @@ def transit_visible_from_mars(R1, R2, R3, r12, r13):
     r12_mag = np.linalg.norm(r12)
     r13_mag = np.linalg.norm(r13)
 
+<<<<<<< HEAD
     delta = (R1 - R2) / r12_mag
 
+=======
+    delta = (R1 - R2) / r12_mag                      # eq. (14)
+
+    # eq. (37): depends only on R1, delta, r13, R3 -- not on Venus's
+    # exact direction, only its distance (via delta)
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     Kint = R1**2 + (1 - delta**2) * (r13_mag**2 - R3**2)
     if Kint < 0:
         # Mars is closer to the Sun than the cone's own radius allows
@@ -52,9 +65,20 @@ def transit_visible_from_mars(R1, R2, R3, r12, r13):
         return False
 
     sqrtK = np.sqrt(Kint)
+<<<<<<< HEAD
     r_tan = (Kint + R1**2 - 2*delta*R1*sqrtK) / (1 - delta**2)
     cos_xi_tan = sqrtK / r_tan
 
+=======
+
+    # eq. (53): tangent-point distance from the Sun
+    r_tan = (Kint + R1**2 - 2*delta*R1*sqrtK) / (1 - delta**2)
+
+    # eq. (54)
+    cos_xi_tan = sqrtK / r_tan
+
+    # eq. (55)
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     numerator = Kint**1.5 - delta * R1 * Kint
     denom = r13_mag * np.sqrt((1 - delta**2) * Kint * (r_tan * (1 - delta**2)))
     cos_kappa_tan = numerator / denom
@@ -63,7 +87,14 @@ def transit_visible_from_mars(R1, R2, R3, r12, r13):
     kappa_tan = np.arccos(np.clip(cos_kappa_tan, -1.0, 1.0))
     psi_bullet = abs(xi_tan) + abs(kappa_tan)          # eq. (58)
 
+<<<<<<< HEAD
     cos_psi = np.dot(r12, r13) / (r12_mag * r13_mag)
+=======
+    # eq. (56)
+    cos_psi = np.dot(r12, r13) / (r12_mag * r13_mag)
+
+    # eq. (57)
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     return cos_psi >= np.cos(psi_bullet)
 
 def circle_overlap_area(R1, R2, d):
@@ -108,6 +139,13 @@ def transit_depth(R_venus_au, v_m_pos, alpha_sun, theta):
 
 def get_grazing_coordinates(datetime_jd, mars_pos, venus_pos, R_venus_au, R_atm_km=120.0):
     """
+<<<<<<< HEAD
+=======
+    Get the grazing point coordinates working entirely in AU.
+    
+    Parameters:
+    -----------
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     datetime_jd : float
         Julian date at mid-transit
     mars_pos : array-like
@@ -118,6 +156,13 @@ def get_grazing_coordinates(datetime_jd, mars_pos, venus_pos, R_venus_au, R_atm_
         Venus radius in AU
     R_atm_km : float
         Atmospheric radius in km (default: 120 km to match VOTable coordinates)
+<<<<<<< HEAD
+=======
+    
+    Returns:
+    --------
+    tuple : (longitude_deg, latitude_deg)
+>>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
     """
     
     AU_TO_KM = 149597870.7
