@@ -1,27 +1,3 @@
-<<<<<<< HEAD
-=======
-"""
-classes_new.py
-
-Rewritten VenusAtmosphere. The core fix from before: number density AND
-cross-section are now evaluated together, at the same altitude, at every
-point along each line-of-sight ray -- rather than computing a single
-column density and multiplying it by a single cross-section afterward.
-That's what lets the 75-110 km altitude structure (both n(h) and, through
-T(h)/P(h)-dependent line broadening, sigma(h, lambda)) actually shape the
-resulting spectrum.
-
-Geometry convention: everything is in metres, measured as radius from
-Venus's centre (r), not "altitude above the cloud deck". This avoids the
-R_base/R_top mismatch bug from the previous version, where alt_max_m
-(a bare altitude, ~1.1e5 m) was compared directly against impact
-parameters b (~6.1e6 m, a radius from the centre).
-
-  R_base = R_venus + alt_min_km   (75 km -> fully opaque disk below this)
-  R_top  = R_venus + alt_max_km   (110 km -> fully transparent above this)
-"""
-
->>>>>>> 85825ef69bab8196adfad04e80e0a0bdaf35590b
 import numpy as np
 
 _trapz = getattr(np, "trapezoid", None) or np.trapz
